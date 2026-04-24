@@ -14,7 +14,8 @@ import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { Video, MessageSquare, Music, ExternalLink, ChevronDown, ChevronRight, Loader2, Ungroup, Group, X, Filter, ArrowUpDown, ArrowUp, ArrowDown, Flame, Workflow, FolderOpen, LayoutDashboard, List, GitBranch, Users, RefreshCcw, CheckCircle, Play, Pause, Clock, Phone, ArrowRight, CalendarIcon, AlertTriangle, Timer, Search, Image, Share2 } from "lucide-react";
 import { PhotoPipelineView } from "./PhotoPipelineView";
-import { FileDetailsExpander } from "@/components/video-edit/FileDetailsExpander";
+import { PhotoFileDetailsExpander } from "./PhotoFileDetailsExpander";
+import { ROLE_LABEL, ROLE_PILL_CLASS, PHOTO_ROLE_CODES } from "./photographer-role-utils";
 import { FloatingEditorChat } from "@/components/video-edit/FloatingEditorChat";
 import { supabase } from "@/integrations/supabase/client";
 import { adToBS, nepaliMonthsEnglish, getBSYearsRange, formatBSDate } from "@/lib/nepali-date";
@@ -412,6 +413,8 @@ function PhotoEditTable({
             <TableHead className="w-14 text-center">Priority</TableHead>
             <TableHead>Client Name</TableHead>
             <TableHead>Event</TableHead>
+            <TableHead>Photographer</TableHead>
+            <TableHead className="w-32">Role</TableHead>
             <TableHead>Edit Type</TableHead>
             <TableHead>Editor</TableHead>
             {COLORIST_STAGES.has(currentStageKey) && <TableHead>Colorist</TableHead>}
@@ -428,7 +431,7 @@ function PhotoEditTable({
         <TableBody>
           {rows.length === 0 && (
             <TableRow>
-              <TableCell colSpan={COLORIST_STAGES.has(currentStageKey) ? 17 : 16} className="text-center py-12 text-muted-foreground">
+              <TableCell colSpan={COLORIST_STAGES.has(currentStageKey) ? 19 : 18} className="text-center py-12 text-muted-foreground">
                 No rows found
               </TableCell>
             </TableRow>
@@ -493,6 +496,25 @@ function PhotoEditTable({
                 <div className="text-sm">{row.subEventName || row.eventName}</div>
                 {row.subEventName && (
                   <div className="text-xs text-muted-foreground">{row.eventName}</div>
+                )}
+              </TableCell>
+              <TableCell>
+                {row.photographerName ? (
+                  <span className="text-sm font-medium text-foreground">{row.photographerName}</span>
+                ) : (
+                  <span className="text-xs text-muted-foreground">—</span>
+                )}
+              </TableCell>
+              <TableCell>
+                {row.photographerRole ? (
+                  <span
+                    className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold whitespace-nowrap ${ROLE_PILL_CLASS[row.photographerRole] || ''}`}
+                    title={row.photographerSide || ROLE_LABEL[row.photographerRole]}
+                  >
+                    {ROLE_LABEL[row.photographerRole] || row.photographerRole} ({row.photographerRole})
+                  </span>
+                ) : (
+                  <span className="text-xs text-muted-foreground">—</span>
                 )}
               </TableCell>
               <TableCell>
@@ -695,8 +717,8 @@ function PhotoEditTable({
             </TableRow>
             {isExpanded && (
               <TableRow>
-                <TableCell colSpan={17} className="p-0 bg-muted/20 border-b-2 border-primary/20">
-                  <FileDetailsExpander
+                <TableCell colSpan={COLORIST_STAGES.has(currentStageKey) ? 19 : 18} className="p-0 bg-muted/20 border-b-2 border-primary/20">
+                  <PhotoFileDetailsExpander
                     registeredDateTimeAD={row.registeredDateTimeAD}
                     eventName={row.eventName}
                   />
@@ -722,11 +744,15 @@ function applyFiltersAndSort(
   filterMonth: number | null,
   sortMode: SortMode,
   filterEditor: string | null = null,
+  filterPhotographer: string | null = null,
+  filterRole: string | null = null,
 ): DisplayRow[] {
   let result = rows.filter(row => {
     if (filterClient && row.clientName !== filterClient) return false;
     if (filterEditType && row.editType !== filterEditType) return false;
     if (filterEditor && row.editor !== filterEditor) return false;
+    if (filterPhotographer && row.photographerName !== filterPhotographer) return false;
+    if (filterRole && (row.photographerRole || '').toUpperCase() !== filterRole.toUpperCase()) return false;
     if (filterYear || filterMonth) {
       const bs = getRowBSDate(row);
       if (!bs) return false;
@@ -1657,6 +1683,8 @@ export function DesktopPhotoEditTracker() {
   const [filterMonth, setFilterMonth] = useState<number | null>(null);
   const [sortMode, setSortMode] = useState<SortMode>('default');
   const [filterEditor, setFilterEditor] = useState<string | null>(null);
+  const [filterPhotographer, setFilterPhotographer] = useState<string | null>(null);
+  const [filterRole, setFilterRole] = useState<string | null>(null);
   const [activeDesktopTab, setActiveDesktopTab] = useState<string>("QUEUE");
   const [pipelineInitialStage, setPipelineInitialStage] = useState<string | undefined>();
   const [searchOpen, setSearchOpen] = useState(false);
@@ -1715,7 +1743,7 @@ export function DesktopPhotoEditTracker() {
     setSearchQuery('');
   }, []);
 
-  const hasFilters = !!(filterClient || filterEditType || filterYear || filterMonth || filterEditor);
+  const hasFilters = !!(filterClient || filterEditType || filterYear || filterMonth || filterEditor || filterPhotographer || filterRole);
   const hasSortOrFilter = hasFilters || sortMode !== 'default';
 
   useEffect(() => {
@@ -1812,10 +1840,10 @@ export function DesktopPhotoEditTracker() {
   const filteredRowsByStatus = useMemo(() => {
     const result: Record<string, DisplayRow[]> = {};
     for (const stage of STAGES) {
-      result[stage.key] = applyFiltersAndSort(rowsByStatus[stage.key] || [], filterClient, filterEditType, filterYear, filterMonth, sortMode, filterEditor);
+      result[stage.key] = applyFiltersAndSort(rowsByStatus[stage.key] || [], filterClient, filterEditType, filterYear, filterMonth, sortMode, filterEditor, filterPhotographer, filterRole);
     }
     return result;
-  }, [rowsByStatus, filterClient, filterEditType, filterYear, filterMonth, sortMode, filterEditor]);
+  }, [rowsByStatus, filterClient, filterEditType, filterYear, filterMonth, sortMode, filterEditor, filterPhotographer, filterRole]);
 
   // Pipeline position map
   const pipelinePosMap = useMemo(() => {
@@ -1833,7 +1861,15 @@ export function DesktopPhotoEditTracker() {
     rows.map(r => ({ ...r, _pipelinePos: pipelinePosMap[r.id] || 0 }));
 
   const totalCount = STAGES.reduce((sum, s) => sum + (rowsByStatus[s.key]?.length || 0), 0);
-  const clearAll = () => { setFilterClient(null); setFilterEditType(null); setFilterYear(null); setFilterMonth(null); setFilterEditor(null); setSortMode('default'); };
+  const clearAll = () => { setFilterClient(null); setFilterEditType(null); setFilterYear(null); setFilterMonth(null); setFilterEditor(null); setFilterPhotographer(null); setFilterRole(null); setSortMode('default'); };
+
+  const uniquePhotographerNames = useMemo(() => {
+    const names = new Set<string>();
+    for (const stage of STAGES) {
+      (rowsByStatus[stage.key] || []).forEach(r => { if (r.photographerName) names.add(r.photographerName); });
+    }
+    return Array.from(names).sort();
+  }, [rowsByStatus]);
 
   const filteredClientSummary = useMemo(() => {
     const total = STAGES.reduce((sum, stage) => sum + (filteredRowsByStatus[stage.key]?.length || 0), 0);
@@ -2064,6 +2100,33 @@ export function DesktopPhotoEditTracker() {
                           Editor: {filterEditor} <X className="w-3 h-3" />
                         </Badge>
                       )}
+                      {filterPhotographer && (
+                        <Badge variant="secondary" className="gap-1 text-xs cursor-pointer" onClick={() => setFilterPhotographer(null)}>
+                          Photographer: {filterPhotographer} <X className="w-3 h-3" />
+                        </Badge>
+                      )}
+                      <Select value={filterPhotographer || "all"} onValueChange={(v) => setFilterPhotographer(v === "all" ? null : v)}>
+                        <SelectTrigger className="w-40 h-7 text-xs"><SelectValue placeholder="Photographer" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All Photographers</SelectItem>
+                          {uniquePhotographerNames.map(n => <SelectItem key={n} value={n}>{n}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                      <div className="inline-flex items-center gap-1">
+                        {PHOTO_ROLE_CODES.map(code => (
+                          <button
+                            key={code}
+                            onClick={() => setFilterRole(prev => prev === code ? null : code)}
+                            className={`px-2 py-0.5 rounded-md text-[11px] font-semibold border transition-all ${
+                              filterRole === code
+                                ? `${ROLE_PILL_CLASS[code]} ring-2 ring-foreground/30`
+                                : `${ROLE_PILL_CLASS[code]} opacity-60 hover:opacity-100`
+                            }`}
+                          >
+                            {ROLE_LABEL[code]} ({code})
+                          </button>
+                        ))}
+                      </div>
                       <Select value={filterYear?.toString() || "all"} onValueChange={(v) => setFilterYear(v === "all" ? null : Number(v))}>
                         <SelectTrigger className="w-28 h-7 text-xs"><SelectValue placeholder="Year" /></SelectTrigger>
                         <SelectContent>

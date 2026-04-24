@@ -5,6 +5,7 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Image, Loader2, Ungroup, Group, X, Filter, ArrowUpDown, ArrowUp, ArrowDown, Flame, Workflow, MessageSquare, ArrowLeft } from "lucide-react";
+import { ROLE_LABEL, ROLE_PILL_CLASS } from "./photographer-role-utils";
 import { PhotoPipelineView } from "./PhotoPipelineView";
 import { EditorChatSection } from "@/components/video-edit/EditorChat";
 import { supabase } from "@/integrations/supabase/client";
@@ -107,6 +108,18 @@ function PhotoCard({
             {row.clientName}
           </button>
           <p className="text-xs text-muted-foreground truncate">{row.subEventName || row.eventName}</p>
+          {(row.photographerName || row.photographerRole) && (
+            <div className="flex items-center gap-1.5 flex-wrap mt-1">
+              {row.photographerName && (
+                <span className="text-[11px] font-semibold text-foreground truncate">{row.photographerName}</span>
+              )}
+              {row.photographerRole && (
+                <span className={`inline-flex items-center px-1.5 py-0 rounded text-[9px] font-semibold ${ROLE_PILL_CLASS[row.photographerRole] || ''}`}>
+                  {ROLE_LABEL[row.photographerRole] || row.photographerRole} ({row.photographerRole})
+                </span>
+              )}
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-1 shrink-0">
           <button

@@ -29,18 +29,21 @@ export interface PhotoEditRow {
   deadline: string;
   stageHistory: string;
   youtubeLink: string;
+  photographerName: string;
+  photographerRole: string; // PB | PG | EP | ''
+  photographerSide: string; // BRIDE SIDE | GROOM SIDE | ''
 }
 
-const PHOTO_SECTION = "photos";
-const DEFAULT_ON_TYPES = ["all_photos"] as const;
 const FINALIZED_CUTOFF_YEAR = 2082;
 const FINALIZED_CUTOFF_MONTH = 12;
 
-const DELIVERABLE_TYPE_LABELS: Record<string, string> = {
-  all_photos: "All Photos",
-  selected_photos: "Selected Photos",
-  insta_post: "Insta Post",
-};
+const ALL_PHOTOS_LABEL = "All Photos";
+
+const PHOTOGRAPHER_ROLES: { column: string; code: "PB" | "PG" | "EP"; side: string }[] = [
+  { column: "photographer_bride", code: "PB", side: "BRIDE SIDE" },
+  { column: "photographer_groom", code: "PG", side: "GROOM SIDE" },
+  { column: "extra_photographer", code: "EP", side: "" },
+];
 
 function normalizeKeyPart(value: string | null | undefined): string {
   return (value || "")
@@ -50,28 +53,13 @@ function normalizeKeyPart(value: string | null | undefined): string {
     .replace(/\s+/g, " ");
 }
 
-function makeEventKey(registeredDateTimeAD: string, eventName: string | null | undefined): string {
-  return `${registeredDateTimeAD}||${normalizeKeyPart(eventName)}`;
-}
-
-function makeTrackerCompositeKey(
-  registeredDateTimeAD: string,
-  eventName: string | null | undefined,
-  subEventName: string | null | undefined,
-  editType: string | null | undefined,
-): string {
-  return `${registeredDateTimeAD}||${normalizeKeyPart(eventName)}||${normalizeKeyPart(subEventName)}||${normalizeKeyPart(editType)}`;
-}
-
-function makeEnabledRowKey(subEventName: string | null | undefined, editType: string | null | undefined): string {
-  return `${normalizeKeyPart(subEventName)}||${normalizeKeyPart(editType)}`;
-}
-
 function normalizeEditType(value: string | null | undefined): string {
   const raw = (value || "").trim();
   if (!raw) return "";
   const key = raw.toLowerCase();
-  if (DELIVERABLE_TYPE_LABELS[key]) return DELIVERABLE_TYPE_LABELS[key];
+  if (key === "all_photos" || key === "all photos") return "All Photos";
+  if (key === "selected_photos" || key === "selected photos") return "Selected Photos";
+  if (key === "insta_post" || key === "insta post") return "Insta Post";
   return raw
     .replace(/[_-]+/g, " ")
     .replace(/\s+/g, " ")
@@ -79,25 +67,8 @@ function normalizeEditType(value: string | null | undefined): string {
     .replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
-function editTypeToDeliverableKey(editType: string): string {
-  const map: Record<string, string> = {
-    "All Photos": "all_photos",
-    "Selected Photos": "selected_photos",
-    "Insta Post": "insta_post",
-  };
-  return map[editType] || editType.toLowerCase().replace(/\s+/g, "_");
-}
-
-function splitItemNames(value: string | null | undefined): string[] {
-  return (value || "")
-    .split(/\|\|\||,/)
-    .map((name) => name.trim())
-    .filter(Boolean);
-}
-
-function isDefaultOnType(deliverableType: string): boolean {
-  const key = deliverableType.toLowerCase().replace(/[\s_-]+/g, "_");
-  return (DEFAULT_ON_TYPES as readonly string[]).includes(key);
+function isAllPhotos(editType: string | null | undefined): boolean {
+  return normalizeEditType(editType).toLowerCase() === "all photos";
 }
 
 function isAtOrBeforeChaitra2082(eventYear: string | null | undefined, eventMonth: string | null | undefined): boolean {
@@ -109,29 +80,29 @@ function isAtOrBeforeChaitra2082(eventYear: string | null | undefined, eventMont
   return month > 0 && month <= FINALIZED_CUTOFF_MONTH;
 }
 
-function computeEffectiveDeliverables(allDeliverablesForEvent: any[]): any[] {
-  const byType = new Map<string, any>();
-  for (const d of allDeliverablesForEvent) {
-    byType.set(d.deliverable_type, d);
-  }
+/** Split a comma / pipe / newline separated freelancer field into individual names. */
+function splitFreelancerNames(value: string | null | undefined): string[] {
+  return (value || "")
+    .split(/[,|\n]+/)
+    .map((n) => n.trim())
+    .filter(Boolean);
+}
 
-  const effective: any[] = [];
-  for (const defaultType of DEFAULT_ON_TYPES) {
-    const row = byType.get(defaultType);
-    if (!row) {
-      effective.push({ deliverable_type: defaultType, enabled: true, quantity: 1, item_names: "" });
-    } else if (row.enabled) {
-      effective.push(row);
-    }
-  }
-
-  for (const type of Array.from(byType.keys())) {
-    const row = byType.get(type)!;
-    if ((DEFAULT_ON_TYPES as readonly string[]).includes(type)) continue;
-    if (row.enabled) effective.push(row);
-  }
-
-  return effective;
+/** Compose tracker uniqueness key. Identity = event + edit-type + photographer-role + photographer-name. */
+function makeTrackerCompositeKey(
+  registeredDateTimeAD: string,
+  eventName: string | null | undefined,
+  editType: string | null | undefined,
+  photographerRole: string | null | undefined,
+  photographerName: string | null | undefined,
+): string {
+  return [
+    registeredDateTimeAD,
+    normalizeKeyPart(eventName),
+    normalizeKeyPart(editType),
+    (photographerRole || "").toUpperCase(),
+    normalizeKeyPart(photographerName),
+  ].join("||");
 }
 
 function dbToRow(r: any): PhotoEditRow {
@@ -163,6 +134,9 @@ function dbToRow(r: any): PhotoEditRow {
     deadline: r.deadline || "",
     stageHistory: r.stage_history || "",
     youtubeLink: "",
+    photographerName: r.photographer_name || "",
+    photographerRole: (r.photographer_role || "").toUpperCase(),
+    photographerSide: r.photographer_side || "",
   };
 }
 
@@ -248,43 +222,11 @@ export async function pushPhotoToStatus(id: string, newStatus: string): Promise<
   if (error) throw new Error(error.message);
 }
 
-function generateRowsFromEffective(
-  effective: any[],
-  baseRow: any,
-  eventName: string,
-  regDateTimeAD: string,
-  existingKeys: Set<string>,
-): any[] {
-  const rows: any[] = [];
-
-  for (const d of effective) {
-    const editType = normalizeEditType(d.deliverable_type);
-    if (!editType) continue;
-
-    const qty = d.quantity || 1;
-    const itemNames = splitItemNames(d.item_names);
-
-    if (qty <= 1 && itemNames.length <= 1) {
-      const compositeKey = makeTrackerCompositeKey(regDateTimeAD, eventName, itemNames[0] || "", editType);
-      if (!existingKeys.has(compositeKey)) {
-        rows.push({ ...baseRow, edit_type: editType });
-        existingKeys.add(compositeKey);
-      }
-    } else {
-      for (let i = 0; i < qty; i++) {
-        const subName = itemNames[i] || `${editType} ${i + 1}`;
-        const compositeKey = makeTrackerCompositeKey(regDateTimeAD, eventName, subName, editType);
-        if (!existingKeys.has(compositeKey)) {
-          rows.push({ ...baseRow, edit_type: editType, reference: subName });
-          existingKeys.add(compositeKey);
-        }
-      }
-    }
-  }
-
-  return rows;
-}
-
+/**
+ * Generate one tracker row per assigned photographer for "All Photos" deliverable.
+ * Selected Photos / Insta Post are NOT auto-generated — they come from the
+ * selection workflow in the deliverables module.
+ */
 export async function ensurePhotoEditRows(): Promise<number> {
   const today = new Date().toISOString().split("T")[0];
 
@@ -323,42 +265,49 @@ export async function ensurePhotoEditRows(): Promise<number> {
 
   const bookedEvents = events.filter((e) => bookedMap.has(e.registered_date_time_ad));
 
-  const { data: existingRows } = await supabase
-    .from("photo_edit_tracker")
-    .select("registered_date_time_ad, event_name, edit_type, reference")
-    .eq("deleted", false);
-
-  const existingKeys = new Set(
-    (existingRows || []).map((r) => makeTrackerCompositeKey(r.registered_date_time_ad, r.event_name || "", r.reference || "", normalizeEditType(r.edit_type))),
-  );
-
+  // Load assignments for booked events
   const bookedRegDates = Array.from(bookedMap.keys());
-  const allDeliverables: any[] = [];
+  const allAssignments: any[] = [];
   for (let i = 0; i < bookedRegDates.length; i += 50) {
     const batch = bookedRegDates.slice(i, i + 50);
     const { data } = await supabase
-      .from("client_deliverables")
-      .select("*")
-      .in("registered_date_time_ad", batch)
-      .eq("section", PHOTO_SECTION);
-    if (data) allDeliverables.push(...data);
+      .from("freelancer_assignments")
+      .select("registered_date_time_ad, event, photographer_bride, photographer_groom, extra_photographer")
+      .in("registered_date_time_ad", batch);
+    if (data) allAssignments.push(...data);
   }
 
-  const eventDeliverablesMap = new Map<string, any[]>();
-  for (const d of allDeliverables) {
-    const key = makeEventKey(d.registered_date_time_ad, d.event_name);
-    if (!eventDeliverablesMap.has(key)) eventDeliverablesMap.set(key, []);
-    eventDeliverablesMap.get(key)!.push(d);
+  const assignmentMap = new Map<string, any>(); // key = regDate||normalized event
+  for (const a of allAssignments) {
+    assignmentMap.set(`${a.registered_date_time_ad}||${normalizeKeyPart(a.event)}`, a);
   }
+
+  // Existing All-Photos rows for de-duplication
+  const { data: existingRows } = await supabase
+    .from("photo_edit_tracker")
+    .select("registered_date_time_ad, event_name, edit_type, photographer_role, photographer_name")
+    .eq("deleted", false);
+
+  const existingKeys = new Set(
+    (existingRows || []).map((r) =>
+      makeTrackerCompositeKey(
+        r.registered_date_time_ad,
+        r.event_name || "",
+        r.edit_type || "",
+        r.photographer_role || "",
+        r.photographer_name || "",
+      ),
+    ),
+  );
 
   const newRows: any[] = [];
   for (const ev of bookedEvents) {
     const client = bookedMap.get(ev.registered_date_time_ad)!;
-    const delKey = makeEventKey(ev.registered_date_time_ad, ev.event_name || "");
-    const rawDeliverables = eventDeliverablesMap.get(delKey) || [];
-    const effective = computeEffectiveDeliverables(rawDeliverables);
-    const autoStatus = isAtOrBeforeChaitra2082(ev.event_year, ev.event_month) ? "FINALIZED" : "QUEUE";
+    const assignmentKey = `${ev.registered_date_time_ad}||${normalizeKeyPart(ev.event_name)}`;
+    const assignment = assignmentMap.get(assignmentKey);
+    if (!assignment) continue; // no photographers assigned yet → no rows
 
+    const autoStatus = isAtOrBeforeChaitra2082(ev.event_year, ev.event_month) ? "FINALIZED" : "QUEUE";
     const baseRow = {
       registered_date_time_ad: ev.registered_date_time_ad,
       registered_date_bs: client.registered_date_bs,
@@ -369,11 +318,32 @@ export async function ensurePhotoEditRows(): Promise<number> {
       event_day: ev.event_day || "",
       event_date_ad: ev.event_date_ad || "",
       photo_edit_status: autoStatus,
+      edit_type: ALL_PHOTOS_LABEL,
       synced_to_sheet: false,
       stage_history: `${autoStatus} [${new Date().toISOString()}]`,
     };
 
-    newRows.push(...generateRowsFromEffective(effective, baseRow, ev.event_name || "", ev.registered_date_time_ad, existingKeys));
+    for (const role of PHOTOGRAPHER_ROLES) {
+      const names = splitFreelancerNames(assignment[role.column]);
+      for (const name of names) {
+        const compositeKey = makeTrackerCompositeKey(
+          ev.registered_date_time_ad,
+          ev.event_name || "",
+          ALL_PHOTOS_LABEL,
+          role.code,
+          name,
+        );
+        if (existingKeys.has(compositeKey)) continue;
+        existingKeys.add(compositeKey);
+        newRows.push({
+          ...baseRow,
+          reference: name,
+          photographer_name: name,
+          photographer_role: role.code,
+          photographer_side: role.side,
+        });
+      }
+    }
   }
 
   if (newRows.length === 0) return 0;
@@ -387,75 +357,65 @@ export async function ensurePhotoEditRows(): Promise<number> {
   return newRows.length;
 }
 
+/**
+ * Soft-delete auto-generated "All Photos" QUEUE rows whose photographer is
+ * no longer present in the assignment for that event. Other edit types
+ * (Selected Photos / Insta Post) are owned by the deliverables workflow and
+ * are intentionally left untouched here.
+ */
 export async function syncPhotoRowsWithDeliverables(): Promise<number> {
   const today = new Date().toISOString().split("T")[0];
 
   const { data: queueRows } = await supabase
     .from("photo_edit_tracker")
-    .select("id, registered_date_time_ad, event_name, edit_type, reference, event_date_ad")
+    .select("id, registered_date_time_ad, event_name, edit_type, photographer_role, photographer_name, event_date_ad")
     .eq("deleted", false)
     .eq("photo_edit_status", "QUEUE");
 
   if (!queueRows?.length) return 0;
 
-  const regDates = Array.from(new Set(queueRows.map((r) => r.registered_date_time_ad)));
-  const allDeliverables: any[] = [];
+  // Only consider auto-generated All Photos rows
+  const allPhotosRows = queueRows.filter((r) => isAllPhotos(r.edit_type));
+  if (allPhotosRows.length === 0) return 0;
+
+  const regDates = Array.from(new Set(allPhotosRows.map((r) => r.registered_date_time_ad)));
+  const allAssignments: any[] = [];
   for (let i = 0; i < regDates.length; i += 50) {
     const batch = regDates.slice(i, i + 50);
     const { data } = await supabase
-      .from("client_deliverables")
-      .select("*")
-      .in("registered_date_time_ad", batch)
-      .eq("section", PHOTO_SECTION);
-    if (data) allDeliverables.push(...data);
+      .from("freelancer_assignments")
+      .select("registered_date_time_ad, event, photographer_bride, photographer_groom, extra_photographer")
+      .in("registered_date_time_ad", batch);
+    if (data) allAssignments.push(...data);
   }
 
-  const eventDeliverablesMap = new Map<string, any[]>();
-  for (const d of allDeliverables) {
-    const key = makeEventKey(d.registered_date_time_ad, d.event_name);
-    if (!eventDeliverablesMap.has(key)) eventDeliverablesMap.set(key, []);
-    eventDeliverablesMap.get(key)!.push(d);
-  }
-
-  const effectiveEnabledMap = new Map<string, Set<string>>();
-  for (const groupKey of Array.from(eventDeliverablesMap.keys())) {
-    const effective = computeEffectiveDeliverables(eventDeliverablesMap.get(groupKey) || []);
-    const enabledSet = new Set<string>();
-    for (const d of effective) {
-      const editType = normalizeEditType(d.deliverable_type);
-      const qty = d.quantity || 1;
-      const itemNames = splitItemNames(d.item_names);
-      if (qty <= 1 && itemNames.length <= 1) {
-        enabledSet.add(makeEnabledRowKey(itemNames[0] || "", editType));
-      } else {
-        for (let i = 0; i < qty; i++) {
-          const subName = itemNames[i] || `${editType} ${i + 1}`;
-          enabledSet.add(makeEnabledRowKey(subName, editType));
-        }
+  // Build map: assignmentKey → set of "ROLE||normalized name"
+  const assignedSetMap = new Map<string, Set<string>>();
+  for (const a of allAssignments) {
+    const key = `${a.registered_date_time_ad}||${normalizeKeyPart(a.event)}`;
+    const set = new Set<string>();
+    for (const role of PHOTOGRAPHER_ROLES) {
+      for (const name of splitFreelancerNames(a[role.column])) {
+        set.add(`${role.code}||${normalizeKeyPart(name)}`);
       }
     }
-    effectiveEnabledMap.set(groupKey, enabledSet);
+    assignedSetMap.set(key, set);
   }
 
   const toDelete: string[] = [];
-  for (const row of queueRows) {
+  for (const row of allPhotosRows) {
     if ((row.event_date_ad || "") > today) {
       toDelete.push(row.id);
       continue;
     }
-
-    const normalizedGroupKey = makeEventKey(row.registered_date_time_ad, row.event_name || "");
-    const rowEditType = normalizeEditType(row.edit_type || "");
-    const rowKey = makeEnabledRowKey(row.reference || "", rowEditType);
-    const deliverableKey = editTypeToDeliverableKey(rowEditType);
-    const hasRecords = eventDeliverablesMap.has(normalizedGroupKey);
-
-    if (!hasRecords) {
-      if (!isDefaultOnType(deliverableKey)) toDelete.push(row.id);
-    } else {
-      const enabledSet = effectiveEnabledMap.get(normalizedGroupKey);
-      if (!enabledSet || !enabledSet.has(rowKey)) toDelete.push(row.id);
+    const assignmentKey = `${row.registered_date_time_ad}||${normalizeKeyPart(row.event_name || "")}`;
+    const assignedSet = assignedSetMap.get(assignmentKey);
+    if (!assignedSet) {
+      toDelete.push(row.id);
+      continue;
     }
+    const rowKey = `${(row.photographer_role || "").toUpperCase()}||${normalizeKeyPart(row.photographer_name || "")}`;
+    if (!assignedSet.has(rowKey)) toDelete.push(row.id);
   }
 
   if (toDelete.length === 0) return 0;
