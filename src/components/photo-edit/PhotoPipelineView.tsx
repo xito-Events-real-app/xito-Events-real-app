@@ -5,7 +5,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { X, Filter, Flame, ArrowUpDown, ArrowUp, ArrowDown, GripVertical, ChevronDown, ChevronRight, FolderOpen, Timer, CalendarIcon, Image } from "lucide-react";
-import { FileDetailsExpander } from "@/components/video-edit/FileDetailsExpander";
+import { PhotoFileDetailsExpander } from "./PhotoFileDetailsExpander";
+import { ROLE_LABEL, ROLE_PILL_CLASS } from "./photographer-role-utils";
 import { supabase } from "@/integrations/supabase/client";
 import { adToBS, nepaliMonthsEnglish, getBSYearsRange, formatBSDate } from "@/lib/nepali-date";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -253,6 +254,22 @@ function PipelineCard({
             {row.subEventName || row.eventName}
           </p>
 
+          {/* Photographer + role pill */}
+          {(row.photographerName || row.photographerRole) && (
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {row.photographerName && (
+                <span className="text-xs font-semibold text-foreground truncate">
+                  {row.photographerName}
+                </span>
+              )}
+              {row.photographerRole && (
+                <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold ${ROLE_PILL_CLASS[row.photographerRole] || ''}`}>
+                  {ROLE_LABEL[row.photographerRole] || row.photographerRole} ({row.photographerRole})
+                </span>
+              )}
+            </div>
+          )}
+
           {/* Edit type */}
           <span className="inline-flex items-center px-2.5 py-1 rounded-md bg-accent/15 text-accent text-sm font-medium truncate max-w-full">
             {row.editType}
@@ -340,7 +357,7 @@ function PipelineCard({
         {/* Expanded file details */}
         {expanded && (
           <div className="border-t border-border">
-            <FileDetailsExpander
+            <PhotoFileDetailsExpander
               registeredDateTimeAD={row.registeredDateTimeAD}
               eventName={row.eventName}
               compact
