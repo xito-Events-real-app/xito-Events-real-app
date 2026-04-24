@@ -95,7 +95,7 @@ export const suiteModules: SuiteModule[] = [
     description: 'Track photo editing projects',
     icon: Camera,
     path: '/photo-edit',
-    status: 'coming-soon',
+    status: 'active',
     gradient: 'from-amber-500 to-orange-600',
   },
   {
