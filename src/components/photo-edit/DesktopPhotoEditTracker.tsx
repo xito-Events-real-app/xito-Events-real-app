@@ -14,7 +14,8 @@ import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { Video, MessageSquare, Music, ExternalLink, ChevronDown, ChevronRight, Loader2, Ungroup, Group, X, Filter, ArrowUpDown, ArrowUp, ArrowDown, Flame, Workflow, FolderOpen, LayoutDashboard, List, GitBranch, Users, RefreshCcw, CheckCircle, Play, Pause, Clock, Phone, ArrowRight, CalendarIcon, AlertTriangle, Timer, Search, Image, Share2 } from "lucide-react";
 import { PhotoPipelineView } from "./PhotoPipelineView";
-import { FileDetailsExpander } from "@/components/video-edit/FileDetailsExpander";
+import { PhotoFileDetailsExpander } from "./PhotoFileDetailsExpander";
+import { ROLE_LABEL, ROLE_PILL_CLASS, PHOTO_ROLE_CODES } from "./photographer-role-utils";
 import { FloatingEditorChat } from "@/components/video-edit/FloatingEditorChat";
 import { supabase } from "@/integrations/supabase/client";
 import { adToBS, nepaliMonthsEnglish, getBSYearsRange, formatBSDate } from "@/lib/nepali-date";
@@ -412,6 +413,8 @@ function PhotoEditTable({
             <TableHead className="w-14 text-center">Priority</TableHead>
             <TableHead>Client Name</TableHead>
             <TableHead>Event</TableHead>
+            <TableHead>Photographer</TableHead>
+            <TableHead className="w-32">Role</TableHead>
             <TableHead>Edit Type</TableHead>
             <TableHead>Editor</TableHead>
             {COLORIST_STAGES.has(currentStageKey) && <TableHead>Colorist</TableHead>}
@@ -428,7 +431,7 @@ function PhotoEditTable({
         <TableBody>
           {rows.length === 0 && (
             <TableRow>
-              <TableCell colSpan={COLORIST_STAGES.has(currentStageKey) ? 17 : 16} className="text-center py-12 text-muted-foreground">
+              <TableCell colSpan={COLORIST_STAGES.has(currentStageKey) ? 19 : 18} className="text-center py-12 text-muted-foreground">
                 No rows found
               </TableCell>
             </TableRow>
