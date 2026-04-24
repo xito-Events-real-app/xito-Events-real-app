@@ -1,12 +1,12 @@
 import { useState, useEffect, useMemo } from "react";
-import { useVideoEditTracker, STAGES, DisplayRow } from "@/hooks/useVideoEditTracker";
+import { usePhotoEditTracker, STAGES, DisplayRow } from "@/hooks/usePhotoEditTracker";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Video, Loader2, Ungroup, Group, X, Filter, ArrowUpDown, ArrowUp, ArrowDown, Flame, Workflow, MessageSquare, ArrowLeft } from "lucide-react";
-import { WtnPipelineView } from "./WtnPipelineView";
-import { EditorChatSection } from "./EditorChat";
+import { PhotoPipelineView } from "./PhotoPipelineView";
+import { EditorChatSection } from "@/components/video-edit/EditorChat";
 import { supabase } from "@/integrations/supabase/client";
 import { adToBS, nepaliMonthsEnglish, getBSYearsRange } from "@/lib/nepali-date";
 
@@ -61,7 +61,7 @@ function applyFilters(
   return result;
 }
 
-function VideoCard({
+function PhotoCard({
   row,
   index,
   onUpdateField,
@@ -81,7 +81,7 @@ function VideoCard({
   onMerge?: (mergeKey: string) => void;
   onClickClient?: (name: string) => void;
   onClickEditType?: (type: string) => void;
-  editors: { name: string; isVideoEditor: boolean }[];
+  editors: { name: string; isPhotoEditor: boolean }[];
   currentStageKey: string;
 }) {
   const urgCls = URGENCY_COLORS[row.urgency] || URGENCY_COLORS["1"];
@@ -139,8 +139,8 @@ function VideoCard({
           <SelectTrigger className="flex-1 h-8 text-xs"><SelectValue placeholder="Editor..." /></SelectTrigger>
           <SelectContent>
             <SelectItem value="unassigned">Unassigned</SelectItem>
-            {editors.filter(e => e.isVideoEditor && e.name).map(e => <SelectItem key={e.name} value={e.name}>⭐ {e.name}</SelectItem>)}
-            {editors.filter(e => !e.isVideoEditor && e.name).map(e => <SelectItem key={e.name} value={e.name}>{e.name}</SelectItem>)}
+            {editors.filter(e => e.isPhotoEditor && e.name).map(e => <SelectItem key={e.name} value={e.name}>⭐ {e.name}</SelectItem>)}
+            {editors.filter(e => !e.isPhotoEditor && e.name).map(e => <SelectItem key={e.name} value={e.name}>{e.name}</SelectItem>)}
           </SelectContent>
         </Select>
       </div>
@@ -150,8 +150,8 @@ function VideoCard({
           <SelectTrigger className="w-full h-8 text-xs"><SelectValue placeholder="Colorist..." /></SelectTrigger>
           <SelectContent>
             <SelectItem value="unassigned">Unassigned</SelectItem>
-            {editors.filter(e => e.isVideoEditor && e.name).map(e => <SelectItem key={e.name} value={e.name}>⭐ {e.name}</SelectItem>)}
-            {editors.filter(e => !e.isVideoEditor && e.name).map(e => <SelectItem key={e.name} value={e.name}>{e.name}</SelectItem>)}
+            {editors.filter(e => e.isPhotoEditor && e.name).map(e => <SelectItem key={e.name} value={e.name}>⭐ {e.name}</SelectItem>)}
+            {editors.filter(e => !e.isPhotoEditor && e.name).map(e => <SelectItem key={e.name} value={e.name}>{e.name}</SelectItem>)}
           </SelectContent>
         </Select>
       )}
@@ -170,9 +170,9 @@ function VideoCard({
   );
 }
 
-export function MobileVideoEditTracker() {
-  const { rowsByStatus, isLoading, updateField, pushToStatus, splitRow, mergeRow } = useVideoEditTracker();
-  const [editors, setEditors] = useState<{ name: string; isVideoEditor: boolean }[]>([]);
+export function MobilePhotoEditTracker() {
+  const { rowsByStatus, isLoading, updateField, pushToStatus, splitRow, mergeRow } = usePhotoEditTracker();
+  const [editors, setEditors] = useState<{ name: string; isPhotoEditor: boolean }[]>([]);
   const [showPipeline, setShowPipeline] = useState(false);
   const [showChat, setShowChat] = useState(false);
   const [filterClient, setFilterClient] = useState<string | null>(null);
@@ -187,9 +187,9 @@ export function MobileVideoEditTracker() {
 
   useEffect(() => {
     (async () => {
-      const { data } = await supabase.from("freelancers_cache").select("name, video_editor").order("name");
+      const { data } = await supabase.from("freelancers_cache").select("name, photo_editor").order("name");
       if (data) {
-        setEditors(data.filter(f => f.name).map(f => ({ name: f.name!, isVideoEditor: f.video_editor?.toUpperCase() === "YES" })));
+        setEditors(data.filter(f => f.name).map(f => ({ name: f.name!, isPhotoEditor: f.photo_editor?.toUpperCase() === "YES" })));
       }
     })();
   }, []);
@@ -244,8 +244,8 @@ export function MobileVideoEditTracker() {
     return Array.from(names).sort();
   }, [rowsByStatus]);
 
-  const videoEditorNames = useMemo(() =>
-    editors.filter(e => e.isVideoEditor && e.name).map(e => e.name),
+  const photoEditorNames = useMemo(() =>
+    editors.filter(e => e.isPhotoEditor && e.name).map(e => e.name),
   [editors]);
 
   // Chat view
@@ -263,7 +263,7 @@ export function MobileVideoEditTracker() {
         </div>
         <div className="flex-1 px-4 py-4">
           <EditorChatSection
-            editors={videoEditorNames}
+            editors={photoEditorNames}
             mentionOptions={uniqueClientNames.concat(editors.filter(e => e.name).map(e => e.name))}
           />
         </div>
@@ -278,7 +278,7 @@ export function MobileVideoEditTracker() {
           <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-red-500 to-pink-600 flex items-center justify-center">
             <Video className="w-4 h-4 text-white" />
           </div>
-          <h1 className="text-base font-bold text-foreground flex-1">Video Edit</h1>
+          <h1 className="text-base font-bold text-foreground flex-1">Photo Edit</h1>
           <Button
             onClick={() => setShowChat(true)}
             variant="outline"
@@ -297,7 +297,7 @@ export function MobileVideoEditTracker() {
         </div>
       </div>
 
-      {showPipeline && <WtnPipelineView onClose={() => setShowPipeline(false)} />}
+      {showPipeline && <PhotoPipelineView onClose={() => setShowPipeline(false)} />}
 
       <div className="px-4 py-4">
         {isLoading ? (
@@ -349,7 +349,7 @@ export function MobileVideoEditTracker() {
                         </h3>
                         <div className="space-y-3">
                           {addPipelinePos(stageRows).map((row, i) => (
-                            <VideoCard
+                            <PhotoCard
                               key={row.id}
                               row={row}
                               index={i}
@@ -435,7 +435,7 @@ export function MobileVideoEditTracker() {
               <TabsContent key={stage.key} value={stage.key}>
                 <div className="space-y-3">
                   {addPipelinePos(filteredRowsByStatus[stage.key] || []).map((row, i) => (
-                    <VideoCard
+                    <PhotoCard
                       key={row.id}
                       row={row}
                       index={i}

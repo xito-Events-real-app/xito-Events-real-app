@@ -1,11 +1,11 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { useVideoEditTracker, STAGES, DisplayRow } from "@/hooks/useVideoEditTracker";
+import { usePhotoEditTracker, STAGES, DisplayRow } from "@/hooks/usePhotoEditTracker";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { X, Filter, Flame, ArrowUpDown, ArrowUp, ArrowDown, GripVertical, ChevronDown, ChevronRight, FolderOpen, Timer, CalendarIcon } from "lucide-react";
-import { FileDetailsExpander } from "./FileDetailsExpander";
+import { FileDetailsExpander } from "@/components/video-edit/FileDetailsExpander";
 import { supabase } from "@/integrations/supabase/client";
 import { adToBS, nepaliMonthsEnglish, getBSYearsRange, formatBSDate } from "@/lib/nepali-date";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -204,7 +204,7 @@ function getStageLabel(key: string): string {
 interface PipelineCardProps {
   row: DisplayRow & { _stageKey?: string; _pipelinePos?: number };
   stageKey: string;
-  editors: { name: string; isVideoEditor: boolean }[];
+  editors: { name: string; isPhotoEditor: boolean }[];
   onUpdateField: (id: string, field: string, value: string, mergedIds?: string[]) => void;
   onPushToStatus?: (id: string, status: string, mergedIds?: string[]) => void;
   isDropBefore: boolean;
@@ -323,10 +323,10 @@ function PipelineCard({
             <SelectTrigger className="w-full h-8 text-sm"><SelectValue placeholder="Editor..." /></SelectTrigger>
             <SelectContent>
               <SelectItem value="unassigned">Unassigned</SelectItem>
-              {editors.filter(e => e.isVideoEditor && e.name).map(e => (
+              {editors.filter(e => e.isPhotoEditor && e.name).map(e => (
                 <SelectItem key={`ve-${e.name}`} value={e.name}>⭐ {e.name}</SelectItem>
               ))}
-              {editors.filter(e => !e.isVideoEditor && e.name).map(e => (
+              {editors.filter(e => !e.isPhotoEditor && e.name).map(e => (
                 <SelectItem key={e.name} value={e.name}>{e.name}</SelectItem>
               ))}
             </SelectContent>
@@ -372,7 +372,7 @@ function PipelineCard({
 interface SnakeGridProps {
   rows: (DisplayRow & { _stageKey?: string; _pipelinePos?: number })[];
   stageKey: string;
-  editors: { name: string; isVideoEditor: boolean }[];
+  editors: { name: string; isPhotoEditor: boolean }[];
   onUpdateField: (id: string, field: string, value: string, mergedIds?: string[]) => void;
   onPushToStatus?: (id: string, status: string, mergedIds?: string[]) => void;
   cardsPerRow: number;
@@ -532,9 +532,9 @@ function SnakeGrid({ rows, stageKey, editors, onUpdateField, onPushToStatus, car
 
 // --- Main Pipeline View ---
 
-export function WtnPipelineView({ onClose, inline = false, initialStage }: { onClose: () => void; inline?: boolean; initialStage?: string }) {
-  const { rowsByStatus, isLoading, updateField, pushToStatus } = useVideoEditTracker();
-  const [editors, setEditors] = useState<{ name: string; isVideoEditor: boolean }[]>([]);
+export function PhotoPipelineView({ onClose, inline = false, initialStage }: { onClose: () => void; inline?: boolean; initialStage?: string }) {
+  const { rowsByStatus, isLoading, updateField, pushToStatus } = usePhotoEditTracker();
+  const [editors, setEditors] = useState<{ name: string; isPhotoEditor: boolean }[]>([]);
   const [activeTab, setActiveTab] = useState(initialStage || "QUEUE");
   const [filterClient, setFilterClient] = useState<string | null>(null);
   const [filterEditType, setFilterEditType] = useState<string | null>(null);
@@ -559,9 +559,9 @@ export function WtnPipelineView({ onClose, inline = false, initialStage }: { onC
 
   useEffect(() => {
     (async () => {
-      const { data } = await supabase.from("freelancers_cache").select("name, video_editor").order("name");
+      const { data } = await supabase.from("freelancers_cache").select("name, photo_editor").order("name");
       if (data) {
-        setEditors(data.filter(f => f.name).map(f => ({ name: f.name!, isVideoEditor: f.video_editor?.toUpperCase() === "YES" })));
+        setEditors(data.filter(f => f.name).map(f => ({ name: f.name!, isPhotoEditor: f.photo_editor?.toUpperCase() === "YES" })));
       }
     })();
   }, []);

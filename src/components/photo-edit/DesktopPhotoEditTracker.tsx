@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { openWhatsApp } from "@/lib/whatsapp-utils";
-import { useVideoEditTracker, STAGES, DisplayRow } from "@/hooks/useVideoEditTracker";
+import { usePhotoEditTracker, STAGES, DisplayRow } from "@/hooks/usePhotoEditTracker";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
@@ -12,10 +12,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { Video, MessageSquare, Music, ExternalLink, ChevronDown, ChevronRight, Loader2, Ungroup, Group, X, Filter, ArrowUpDown, ArrowUp, ArrowDown, Flame, Workflow, FolderOpen, LayoutDashboard, List, GitBranch, Users, RefreshCcw, CheckCircle, Play, Pause, Clock, Phone, ArrowRight, CalendarIcon, AlertTriangle, Timer, Search, Youtube, Share2 } from "lucide-react";
-import { WtnPipelineView } from "./WtnPipelineView";
-import { FileDetailsExpander } from "./FileDetailsExpander";
-import { FloatingEditorChat } from "./FloatingEditorChat";
+import { Video, MessageSquare, Music, ExternalLink, ChevronDown, ChevronRight, Loader2, Ungroup, Group, X, Filter, ArrowUpDown, ArrowUp, ArrowDown, Flame, Workflow, FolderOpen, LayoutDashboard, List, GitBranch, Users, RefreshCcw, CheckCircle, Play, Pause, Clock, Phone, ArrowRight, CalendarIcon, AlertTriangle, Timer, Search, Image, Share2 } from "lucide-react";
+import { PhotoPipelineView } from "./PhotoPipelineView";
+import { FileDetailsExpander } from "@/components/video-edit/FileDetailsExpander";
+import { FloatingEditorChat } from "@/components/video-edit/FloatingEditorChat";
 import { supabase } from "@/integrations/supabase/client";
 import { adToBS, nepaliMonthsEnglish, getBSYearsRange, formatBSDate } from "@/lib/nepali-date";
 import { cn } from "@/lib/utils";
@@ -366,7 +366,7 @@ function getRowBSDate(row: DisplayRow): { year: number; month: number } | null {
   } catch { return null; }
 }
 
-function VideoEditTable({
+function PhotoEditTable({
   rows,
   onUpdateField,
   onPushToStatus,
@@ -385,7 +385,7 @@ function VideoEditTable({
   onMerge?: (mergeKey: string) => void;
   onClickClient?: (name: string) => void;
   onClickEditType?: (type: string) => void;
-  editors: { name: string; isVideoEditor: boolean }[];
+  editors: { name: string; isPhotoEditor: boolean }[];
   currentStageKey: string;
   onUpdateDeadline?: (id: string, deadline: string | null, mergedIds?: string[]) => void;
 }) {
@@ -559,10 +559,10 @@ function VideoEditTable({
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="unassigned">Unassigned</SelectItem>
-                    {editors.filter(e => e.isVideoEditor && e.name).map(e => (
+                    {editors.filter(e => e.isPhotoEditor && e.name).map(e => (
                       <SelectItem key={`ve-${e.name}`} value={e.name}>⭐ {e.name}</SelectItem>
                     ))}
-                    {editors.filter(e => !e.isVideoEditor && e.name).map(e => (
+                    {editors.filter(e => !e.isPhotoEditor && e.name).map(e => (
                       <SelectItem key={e.name} value={e.name}>{e.name}</SelectItem>
                     ))}
                   </SelectContent>
@@ -576,10 +576,10 @@ function VideoEditTable({
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="unassigned">Unassigned</SelectItem>
-                    {editors.filter(e => e.isVideoEditor && e.name).map(e => (
+                    {editors.filter(e => e.isPhotoEditor && e.name).map(e => (
                       <SelectItem key={`vc-${e.name}`} value={e.name}>⭐ {e.name}</SelectItem>
                     ))}
-                    {editors.filter(e => !e.isVideoEditor && e.name).map(e => (
+                    {editors.filter(e => !e.isPhotoEditor && e.name).map(e => (
                       <SelectItem key={`c-${e.name}`} value={e.name}>{e.name}</SelectItem>
                     ))}
                   </SelectContent>
@@ -652,7 +652,7 @@ function VideoEditTable({
                   <div className="flex items-center justify-center gap-1">
                     {row.youtubeLink.split(',').map((link, i) => (
                       <a key={i} href={link.trim()} target="_blank" rel="noopener noreferrer" className="text-red-600 hover:text-red-500">
-                        <Youtube className="w-4 h-4" />
+                        <Image className="w-4 h-4" />
                       </a>
                     ))}
                   </div>
@@ -923,7 +923,7 @@ function DashboardView({
         </h3>
         {totalProgress === 0 ? (
           <div className="rounded-lg border bg-card p-6 text-center text-muted-foreground text-sm">
-            No videos currently being edited
+            No photos currently being edited
           </div>
         ) : (
           <div className="space-y-5">
@@ -1143,12 +1143,12 @@ function DashboardView({
           <DialogHeader>
             <DialogTitle>Assign to {assignDialogEditor}</DialogTitle>
             <DialogDescription>
-              Top urgent unassigned videos from Queue
+              Top urgent unassigned photos from Queue
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2 max-h-80 overflow-y-auto">
             {urgentUnassigned.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-4">No unassigned videos in queue</p>
+              <p className="text-sm text-muted-foreground text-center py-4">No unassigned photos in queue</p>
             ) : (
               urgentUnassigned.map(row => (
                 <div key={row.id} className="flex items-center justify-between p-3 rounded-lg border bg-card">
@@ -1196,7 +1196,7 @@ function EditorView({ editorName, rowsByStatus, onPushToStatus, onUpdateField, o
   onPushToStatus: (id: string, newStatus: string, mergedIds?: string[]) => void;
   onUpdateField: (id: string, field: string, value: string, mergedIds?: string[]) => void;
   onTogglePlaying: (id: string, currentlyPlaying: boolean, mergedIds?: string[]) => void;
-  editors: { name: string; isVideoEditor: boolean; whatsapp?: string }[];
+  editors: { name: string; isPhotoEditor: boolean; whatsapp?: string }[];
   allClientNames: string[];
 }) {
   const { toast } = useToast();
@@ -1224,7 +1224,7 @@ function EditorView({ editorName, rowsByStatus, onPushToStatus, onUpdateField, o
   const allEditorRows = useMemo(() => {
     const rows: DisplayRow[] = [];
     for (const stage of STAGES) {
-      (rowsByStatus[stage.key] || []).filter(r => r.editor === editorName).forEach(r => rows.push({ ...r, videoEditStatus: stage.key }));
+      (rowsByStatus[stage.key] || []).filter(r => r.editor === editorName).forEach(r => rows.push({ ...r, photoEditStatus: stage.key }));
     }
     return rows;
   }, [editorName, rowsByStatus]);
@@ -1357,7 +1357,7 @@ function EditorView({ editorName, rowsByStatus, onPushToStatus, onUpdateField, o
         </div>
         <div className="flex-1">
           <h2 className="text-lg font-bold text-foreground">{editorName}</h2>
-          <p className="text-xs text-muted-foreground">{totalAssigned} assigned videos</p>
+          <p className="text-xs text-muted-foreground">{totalAssigned} assigned photos</p>
         </div>
         <Button
           size="sm"
@@ -1400,7 +1400,7 @@ function EditorView({ editorName, rowsByStatus, onPushToStatus, onUpdateField, o
       </div>
 
       {groupedByStage.length === 0 ? (
-        <p className="text-center text-muted-foreground py-12">No videos assigned to {editorName}</p>
+        <p className="text-center text-muted-foreground py-12">No photos assigned to {editorName}</p>
       ) : (
         groupedByStage.map(group => {
           const borderColor = STAGE_CARD_COLORS[group.key] || "border-l-gray-400";
@@ -1530,7 +1530,7 @@ function EditorView({ editorName, rowsByStatus, onPushToStatus, onUpdateField, o
 /* ── Sidebar ── */
 type ActiveView = 'dashboard' | 'classic' | 'pipeline' | string;
 
-function VideoEditSidebar({
+function PhotoEditSidebar({
   activeView,
   onViewChange,
   editors,
@@ -1542,7 +1542,7 @@ function VideoEditSidebar({
 }: {
   activeView: ActiveView;
   onViewChange: (view: ActiveView) => void;
-  editors: { name: string; isVideoEditor: boolean }[];
+  editors: { name: string; isPhotoEditor: boolean }[];
   editorCounts: Record<string, number>;
   activeProgressEditors: Set<string>;
   playingEditors: Set<string>;
@@ -1612,7 +1612,7 @@ function VideoEditSidebar({
             <Video className="w-4 h-4 text-white" />
           </div>
           <div className="flex-1">
-            <div className="font-semibold text-sm">Video Edit</div>
+            <div className="font-semibold text-sm">Photo Edit</div>
             <div className="text-[10px] text-zinc-400">Tracker</div>
           </div>
           <button
@@ -1662,16 +1662,16 @@ function VideoEditSidebar({
 
       {/* Footer */}
       <div className="p-4 border-t border-zinc-800">
-        <div className="text-[10px] text-zinc-600 text-center">Video Edit Tracker v2.0</div>
+        <div className="text-[10px] text-zinc-600 text-center">Photo Edit Tracker v2.0</div>
       </div>
     </div>
   );
 }
 
 /* ── Main Component ── */
-export function DesktopVideoEditTracker() {
-  const { rowsByStatus, allRows, isLoading, updateField, pushToStatus, splitRow, mergeRow, togglePlaying, updateDeadline, syncYouTubeLinks } = useVideoEditTracker();
-  const [editors, setEditors] = useState<{ name: string; isVideoEditor: boolean; whatsapp?: string }[]>([]);
+export function DesktopPhotoEditTracker() {
+  const { rowsByStatus, allRows, isLoading, updateField, pushToStatus, splitRow, mergeRow, togglePlaying, updateDeadline, syncYouTubeLinks } = usePhotoEditTracker();
+  const [editors, setEditors] = useState<{ name: string; isPhotoEditor: boolean; whatsapp?: string }[]>([]);
   const [activeView, setActiveView] = useState<ActiveView>('dashboard');
   const [filterClient, setFilterClient] = useState<string | null>(null);
   const [filterEditType, setFilterEditType] = useState<string | null>(null);
@@ -1744,13 +1744,13 @@ export function DesktopVideoEditTracker() {
     let isActive = true;
 
     (async () => {
-      const { data } = await supabase.from("freelancers_cache").select("name, video_editor, whatsapp_no, contact_no").order("name");
+      const { data } = await supabase.from("freelancers_cache").select("name, photo_editor, whatsapp_no, contact_no").order("name");
       if (!isActive || !data) return;
 
       setEditors(
         data
           .filter(f => f.name)
-          .map(f => ({ name: f.name!, isVideoEditor: f.video_editor?.toUpperCase() === "YES", whatsapp: f.whatsapp_no || f.contact_no || '' }))
+          .map(f => ({ name: f.name!, isPhotoEditor: f.photo_editor?.toUpperCase() === "YES", whatsapp: f.whatsapp_no || f.contact_no || '' }))
       );
     })();
 
@@ -1880,7 +1880,7 @@ export function DesktopVideoEditTracker() {
   // Compute editor stage groups for sidebar
   const editorStageGroups = useMemo(() => {
     const progressStages = ['EDIT_ON_PROGRESS', 'COLOR_ON_PROGRESS', 'RE_EDIT_ON_PROGRESS'];
-    const videoEditorNames = editors.filter(e => e.isVideoEditor && e.name).map(e => e.name);
+    const photoEditorNames = editors.filter(e => e.isPhotoEditor && e.name).map(e => e.name);
     
     const active: string[] = [];
     const paused: string[] = [];
@@ -1888,7 +1888,7 @@ export function DesktopVideoEditTracker() {
     const editLab: string[] = [];
     const available: string[] = [];
 
-    for (const name of videoEditorNames) {
+    for (const name of photoEditorNames) {
       const inProgress = progressStages.some(sk => (rowsByStatus[sk] || []).some(r => r.editor === name));
       const isPlayingAny = progressStages.some(sk => (rowsByStatus[sk] || []).some(r => r.editor === name && r.isPlaying));
       const inQueue = (rowsByStatus['QUEUE'] || []).some(r => r.editor === name);
@@ -1911,7 +1911,7 @@ export function DesktopVideoEditTracker() {
 
   return (
     <div className="flex min-h-screen bg-background">
-      <VideoEditSidebar
+      <PhotoEditSidebar
         activeView={activeView}
         onViewChange={setActiveView}
         editors={editors}
@@ -1932,7 +1932,7 @@ export function DesktopVideoEditTracker() {
             <div className="max-w-[1400px] mx-auto">
               <div className="mb-6">
                 <h1 className="text-xl font-bold text-foreground">Dashboard</h1>
-                <p className="text-sm text-muted-foreground">Total: {totalCount} videos across {STAGES.length} stages</p>
+                <p className="text-sm text-muted-foreground">Total: {totalCount} photos across {STAGES.length} stages</p>
               </div>
               <DashboardView
                 rowsByStatus={rowsByStatus}
@@ -1948,7 +1948,7 @@ export function DesktopVideoEditTracker() {
             </div>
           </div>
         ) : activeView === 'pipeline' ? (
-          <WtnPipelineView onClose={() => setActiveView('dashboard')} inline initialStage={pipelineInitialStage} />
+          <PhotoPipelineView onClose={() => setActiveView('dashboard')} inline initialStage={pipelineInitialStage} />
         ) : isEditorView ? (
           <div className="flex-1 overflow-y-auto p-6">
             <div className="max-w-[1200px] mx-auto">
@@ -2041,7 +2041,7 @@ export function DesktopVideoEditTracker() {
                           {stage.label}
                           <Badge variant="outline" className="text-xs">{stageRows.length}</Badge>
                         </h3>
-                        <VideoEditTable
+                        <PhotoEditTable
                           rows={addPipelinePos(stageRows)}
                           onUpdateField={updateField}
                           onPushToStatus={pushToStatus}
@@ -2144,7 +2144,7 @@ export function DesktopVideoEditTracker() {
 
                   {STAGES.map(stage => (
                     <TabsContent key={stage.key} value={stage.key}>
-                      <VideoEditTable
+                      <PhotoEditTable
                         rows={addPipelinePos(filteredRowsByStatus[stage.key] || [])}
                         onUpdateField={updateField}
                         onPushToStatus={pushToStatus}
@@ -2201,7 +2201,7 @@ export function DesktopVideoEditTracker() {
                     className="w-full text-left px-3 py-2.5 rounded-lg hover:bg-muted/60 flex items-center justify-between transition-colors"
                   >
                     <span className="font-medium text-sm text-foreground">{name}</span>
-                    <Badge variant="outline" className="text-[10px]">{total} videos</Badge>
+                    <Badge variant="outline" className="text-[10px]">{total} photos</Badge>
                   </button>
                 );
               })
@@ -2212,7 +2212,7 @@ export function DesktopVideoEditTracker() {
 
       {/* Floating Facebook-style chat widget */}
       <FloatingEditorChat
-        editors={editors.filter(e => e.isVideoEditor && e.name).map(e => e.name)}
+        editors={editors.filter(e => e.isPhotoEditor && e.name).map(e => e.name)}
         mentionOptions={uniqueClientNames.concat(editors.filter(e => e.name).map(e => e.name))}
       />
     </div>
