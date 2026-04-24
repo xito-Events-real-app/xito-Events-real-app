@@ -499,6 +499,25 @@ function PhotoEditTable({
                 )}
               </TableCell>
               <TableCell>
+                {row.photographerName ? (
+                  <span className="text-sm font-medium text-foreground">{row.photographerName}</span>
+                ) : (
+                  <span className="text-xs text-muted-foreground">—</span>
+                )}
+              </TableCell>
+              <TableCell>
+                {row.photographerRole ? (
+                  <span
+                    className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold whitespace-nowrap ${ROLE_PILL_CLASS[row.photographerRole] || ''}`}
+                    title={row.photographerSide || ROLE_LABEL[row.photographerRole]}
+                  >
+                    {ROLE_LABEL[row.photographerRole] || row.photographerRole} ({row.photographerRole})
+                  </span>
+                ) : (
+                  <span className="text-xs text-muted-foreground">—</span>
+                )}
+              </TableCell>
+              <TableCell>
                 <div className="flex items-center gap-1.5">
                   <button
                     onClick={() => onClickEditType?.(row.editType)}
