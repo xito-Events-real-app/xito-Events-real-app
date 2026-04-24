@@ -698,8 +698,8 @@ function PhotoEditTable({
             </TableRow>
             {isExpanded && (
               <TableRow>
-                <TableCell colSpan={17} className="p-0 bg-muted/20 border-b-2 border-primary/20">
-                  <FileDetailsExpander
+                <TableCell colSpan={COLORIST_STAGES.has(currentStageKey) ? 19 : 18} className="p-0 bg-muted/20 border-b-2 border-primary/20">
+                  <PhotoFileDetailsExpander
                     registeredDateTimeAD={row.registeredDateTimeAD}
                     eventName={row.eventName}
                   />
