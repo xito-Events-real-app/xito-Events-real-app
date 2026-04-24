@@ -133,7 +133,7 @@ export function usePhotoEditTracker() {
     return result;
   }, [rowsByStatus]);
 
-  const updateField = useCallback(async (id: string, field: string, value: string) => {
+  const updateField = useCallback(async (id: string, field: string, value: string, _mergedIds?: string[]) => {
     try {
       await apiUpdateField(id, field, value);
       setTimeout(() => loadRows(), 0);
@@ -143,7 +143,7 @@ export function usePhotoEditTracker() {
     }
   }, [toast, loadRows]);
 
-  const pushToStatus = useCallback(async (id: string, newStatus: string) => {
+  const pushToStatus = useCallback(async (id: string, newStatus: string, _mergedIds?: string[]) => {
     const stageLabel = STAGES.find(s => s.key === newStatus)?.label || newStatus;
     try {
       await apiPushToStatus(id, newStatus);
@@ -155,7 +155,7 @@ export function usePhotoEditTracker() {
     }
   }, [toast, loadRows]);
 
-  const togglePlaying = useCallback(async (id: string, currentlyPlaying: boolean) => {
+  const togglePlaying = useCallback(async (id: string, currentlyPlaying: boolean, _mergedIds?: string[]) => {
     const newIsPlaying = !currentlyPlaying;
     const now = new Date().toISOString();
     const historyEntry = `${newIsPlaying ? "RESUMED" : "PAUSED"} [${now}]`;
@@ -186,7 +186,7 @@ export function usePhotoEditTracker() {
     }
   }, [toast, loadRows]);
 
-  const updateDeadline = useCallback(async (id: string, deadline: string | null) => {
+  const updateDeadline = useCallback(async (id: string, deadline: string | null, _mergedIds?: string[]) => {
     try {
       await supabase.from("photo_edit_tracker").update({ deadline, updated_at: new Date().toISOString() }).eq("id", id);
       setTimeout(() => loadRows(), 0);
