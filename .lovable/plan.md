@@ -1,109 +1,192 @@
+# Photo Edit Tracker module
 
+A new module called **Photo Edit Tracker** that behaves like the current Video Edit Tracker, but is driven by the **photo deliverables** section instead of video deliverables.
 
-# Event Details Questions — New section inside XITO GLOBAL
+## What will be built
 
-A second tile inside the XITO GLOBAL module that lets you author a master list of questions to ask clients about their event details. Pure storage + spreadsheet-style management for now — no connection to the client portal or event-details forms yet.
+### 1) New Photo Edit Tracker page
 
-## What the user will see
+Replace the current `/photo-edit` coming-soon page with a full tracker.
 
-### Update to XITO GLOBAL landing (`/xito-global`)
-A second card next to "All Venues":
-- **Event Details Questions** — clipboard-list icon, amber/orange gradient.
-- Click → `/xito-global/event-details-questions`.
+It will keep the same overall structure as Video Edit Tracker:
 
-### New page: Event Details Questions (`/xito-global/event-details-questions`)
+- **Dashboard** view
+- **Classic** view
+- **Pipeline** view
+- editor list in the left sidebar
+- active / paused / on queue / available editor groupings
+- deadline support
+- editor assignment
+- editor portal link
 
-**Header**
-- Back button → `/xito-global`
-- Title "Event Details Questions" + total count
-- "Add Question" button (top-right) → opens drawer
+### 2) Photo-specific workflow stages
 
-**Spreadsheet-style table**
+The photo tracker will use a reduced pipeline:
 
-| # | Question | Sub Question | Dropdown Options | Text Input | Number Input | Events | Actions |
-|---|----------|--------------|------------------|------------|--------------|--------|---------|
-| 1 | Total Number of Guests | — | — | NO | YES | #all-events | ✏️ 🗑️ |
-| 2 | Will the Groom Attend Mehndi? | — | YES / NO | NO | NO | #mehndi | ✏️ 🗑️ |
-| 3 | Number of Choreographed Dance Performances | — | — | NO | YES (5–7) | #mehndi #sangeet #engagement #reception #party | ✏️ 🗑️ |
+- Queue
+- Edit Lab
+- Edit on Progress
+- Exported
+- Client Review
+- Re-Edit on Progress
+- Finalized
 
-- Drag handle on the left to reorder rows (sort order persisted).
-- YES/NO cells render as small green/grey pills.
-- Events render as **hashtag chips** (`#mehndi`, `#sangeet`, `#all-events`).
-- Click row → opens edit drawer.
-- Empty state: friendly message + "Add your first question" button.
+Removed for photos:
 
-**Filters above the table**
-- Search box (matches question text + sub question).
-- Tag filter: a chip rail of all unique tags currently in use across questions; click any chip to filter rows that include it. `#all-events` is pinned first.
+- Color Queue
+- Color Lab
+- Color on Progress
+- Export Queue
 
-### Add / Edit Question drawer
+### 3) Auto-create rows from photo deliverables
 
-Fields, in order:
-1. **Question** (text, required).
-2. **Sub Question** (text, optional).
-3. **Answer Type** — three independent toggles (any combination, like your sample):
-   - **Dropdown Options** — when ON, tag-style chip input lets you add option chips (e.g. `YES`, `NO`, `INDOOR`, `OUTDOOR`, `MIXED`). Comma or Enter to add; click × on a chip to remove.
-   - **Text Input** — ON / OFF.
-   - **Number Input** — ON / OFF, with optional placeholder hint (e.g. "Enter number, e.g., 5–7").
-4. **Events (Tags)** — **free-form hashtag input**, Instagram-style:
-   - Type any keyword and press Enter / comma / space → it becomes a chip rendered as `#keyword` (auto lowercased, spaces replaced with `-`, special chars stripped).
-   - Suggestion dropdown shows previously-used tags from other questions while typing (so people can pick `#mehndi` instead of typing `#mehendi`), but they're free to create a new one.
-   - **`#all-events` is the only fixed system tag** — always available as a one-click pill at the top of the input. Selecting it clears all other tags (and vice versa: adding any other tag auto-removes `#all-events`).
-   - All other tags are user-defined, no preset list — accommodates spelling variations (`#haldi`, `#mehendi`, `#mehndi`, `#sgt`, etc.).
-   - Click × on any chip to remove.
-5. **Save** / **Delete** (delete with confirm dialog when editing).
+Rows will be generated from the **photo deliverables** section in `client_deliverables`.
 
-## What it does NOT do (yet)
-- No connection to Client Portal or Event Details form.
-- No publishing/versioning — every saved row is live in the master list.
-- No client-facing rendering anywhere.
+Per your confirmation:
 
-This is purely the master sheet. Wiring into client flows comes later.
+- generate rows for **all enabled photo deliverables**
+- this includes the default photo deliverable behavior from Deliverables, where **All Photos** is on by default
+- queue will auto-fill from booked events, same pattern as video tracker
 
-## How it works (technical)
+Planned row mapping:
 
-### New table: `xito_global_event_details_questions`
-Columns:
-- `id` (uuid PK), `created_at`, `updated_at`
-- `question` (text, required)
-- `sub_question` (text, default `''`)
-- `dropdown_enabled` (bool, default `false`)
-- `dropdown_options` (jsonb array of strings, default `'[]'`)
-- `text_input_enabled` (bool, default `false`)
-- `number_input_enabled` (bool, default `false`)
-- `number_input_hint` (text, default `''`)
-- `tags` (jsonb array of strings, default `'[]'`) — free-form hashtag list, e.g. `["all-events"]` or `["mehndi","sangeet"]`. Stored without the `#` prefix; UI prepends `#` for display.
-- `sort_order` (int, default `0`)
-- `is_active` (bool, default `true`)
-- RLS: `Authenticated access only`
-- Trigger: `update_updated_at_column` on UPDATE
-- Index on `sort_order`; GIN index on `tags` for fast filtering
+- `all_photos` -> `All Photos`
+- `selected_photos` -> `Selected Photos`
+- `insta_post` -> `Insta Post`
 
-### Tag normalization rules (UI-side)
-- `lowercase`, trim, replace spaces with `-`, strip non-alphanumeric except `-`.
-- Reserved system tag: `all-events` (mutually exclusive with all others).
-- Suggestion source: `SELECT DISTINCT jsonb_array_elements_text(tags) FROM xito_global_event_details_questions` (cached client-side).
+If quantity/item names exist for a photo deliverable, rows will be expanded using the same style as video tracker where practical.
 
-### New files
-1. `src/lib/xito-global-questions-api.ts` — `getAllQuestions()`, `addQuestion()`, `updateQuestion()`, `deleteQuestion()`, `reorderQuestions(orderedIds)`, `getAllUsedTags()`.
-2. `src/hooks/useXitoGlobalQuestions.ts` — loads + exposes filtered/searched list, optimistic updates.
-3. `src/pages/XitoGlobalEventDetailsQuestions.tsx` — main page (header, search, tag-chip filter rail, table).
-4. `src/components/xito-global/QuestionsTable.tsx` — drag-to-reorder spreadsheet table.
-5. `src/components/xito-global/AddEditQuestionDrawer.tsx` — the add/edit form.
-6. `src/components/xito-global/HashtagInput.tsx` — reusable Instagram-style hashtag chip input with suggestion popover and the pinned `#all-events` system pill.
+### 4) Chaitra auto-finalization rule
 
-### Modified files
-- `src/pages/XitoGlobal.tsx` — add the second section card.
-- `src/App.tsx` — register `/xito-global/event-details-questions` route.
+Per your answer, every photo edit row whose event date is **up to the end of Chaitra 2082** will be created or moved directly into:
 
-## Files Changed
-- 1 migration (new table + indexes + trigger)
-- 6 new files
-- 2 edited files (`src/pages/XitoGlobal.tsx`, `src/App.tsx`)
+- **Finalized**
 
-## Confirmations
-- Stand-alone module — does not touch any existing event-details, portal, or client logic.
-- Sheet-style UI mirrors your sample exactly (Question · Sub Question · Dropdown Options · Text Input · Number Input · Events).
-- Tags are free-form hashtags (Instagram-style), with `#all-events` as the only fixed system tag — handles spelling variations across users.
-- Suggestions are pulled from previously-used tags so the team can converge naturally without forcing a fixed list.
+Later dates will follow the normal flow starting from Queue.
 
+### 5) Dedicated photo editor portal
+
+Add a separate public portal route for photo editors, parallel to the current video editor portal.
+
+This page will include the editor cards you requested inside the editor page:
+
+- Current
+- Next Up
+- Last Finalized
+- Finalized
+- Re-Edits
+
+It will also support:
+
+- play/pause style work state
+- grouped rows by stage
+- live updates
+- deadline visibility
+
+## Data model
+
+Create a new table for photo edit tracking instead of mixing with video data.
+
+### New table
+
+`photo_edit_tracker`
+
+It will mirror the video tracker structure closely so the UI can be reused safely, including fields like:
+
+- client/event identity
+- event date parts
+- photo edit status
+- urgency
+- edit type
+- editor
+- company notes / client demand / reference
+- deadline
+- stage history
+- play/pause state
+- edit started time
+- deleted flag
+- synced flag
+- timestamps
+
+RLS will match the existing internal tracker pattern:
+
+- authenticated users: full access
+- optional public read/update policy only for the dedicated photo editor portal route, if needed
+
+## Files likely to be added or changed
+
+### New photo tracker logic
+
+- `src/lib/photo-edit-api.ts`
+- `src/lib/photo-edit-push-scheduler.ts` if sheet sync is kept
+- `src/hooks/usePhotoEditTracker.ts`
+- `src/pages/PhotoEditTracker.tsx`
+- `src/pages/PhotoEditorPortal.tsx`
+
+### Reused / adapted UI
+
+Either:
+
+- extract shared tracker UI from the video tracker into reusable components, or
+- clone the video tracker components into photo-specific versions and remove color-stage logic
+
+Likely touched:
+
+- `src/App.tsx`
+- `src/lib/suite-modules.ts`
+- `src/components/video-edit/DesktopVideoEditTracker.tsx` or shared replacements
+- `src/components/video-edit/MobileVideoEditTracker.tsx` or shared replacements
+- `src/components/video-edit/WtnPipelineView.tsx` or shared replacements
+
+### Database
+
+- new migration for `photo_edit_tracker`
+- type generation update will follow automatically
+
+## Technical details
+
+### Row generation source
+
+The implementation will follow the same pattern as `ensureVideoEditRows()` and `syncWithDeliverables()` in `src/lib/video-edit-api.ts`, but for photo sections:
+
+- read booked events from `event_details_cache`
+- confirm booked clients from `clients_cache`
+- read photo deliverables from `client_deliverables` where section is `photos`
+- treat `all_photos` as default-on unless explicitly disabled
+- create missing tracker rows
+- soft-delete stale queue rows when a photo deliverable is disabled
+
+### Editor source
+
+Available editors will come from `freelancers_cache.photo_editor = YES`, just like video uses `video_editor = YES`.
+
+### Portal separation
+
+The existing `/editor-portal/:editorName` is video-specific today. I will create a separate route for photo editors so both systems stay clean, for example:
+
+- `/photo-editor-portal/:editorName`
+
+### Stage ordering in editor page
+
+The photo editor page will keep your requested summary cards and a grouped task list, but will use the photo stage order only.
+
+### Sync to sheets
+
+I need to verify whether you want photo edits pushed to sheets the same way as video edits. The current video tracker already invokes the heavy Google Sheets function, which has timeout risk. I will keep the photo tracker functional even if sheet sync is deferred or disabled initially.
+
+## Expected result
+
+After implementation:
+
+- **Photo Edit Tracker** opens as a real module from `/photo-edit`
+- photo rows auto-appear from photo deliverables
+- rows for events up to **Chaitra 2082** land straight in **Finalized**
+- dashboard / classic / pipeline views match the current tracker style
+- active / paused / on queue / available editor sections remain
+- deadlines remain
+- photo editors get their own portal page
+- **Current / Next Up / Last Finalized / Finalized / Re-Edits** appear inside the photo editor page
+
+## One important implementation choice
+
+To keep this stable and fast, I will **not** connect the new photo tracker to the existing Google Sheets edge function in the first pass unless the current sheet path is clearly defined and safe. The main tracker UI, database flow, and editor portal will work first; external sync can be added after that without blocking the module.
