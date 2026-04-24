@@ -120,8 +120,6 @@ export default function EditorPortal() {
 
   useEffect(() => {
     loadRows();
-
-    // Load mention options (editors + client names)
     (async () => {
       const [{ data: freelancers }, { data: clients }] = await Promise.all([
         supabase.from("freelancers_cache").select("name").order("name"),
@@ -134,15 +132,10 @@ export default function EditorPortal() {
     })();
   }, [loadRows]);
 
-  // Realtime for tracker changes
   useEffect(() => {
     const channel = supabase
       .channel("editor-portal-tracker")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "video_edit_tracker" },
-        () => setTimeout(loadRows, 500)
-      )
+      .on("postgres_changes", { event: "*", schema: "public", table: "video_edit_tracker" }, () => setTimeout(loadRows, 500))
       .subscribe();
 
     return () => {
@@ -159,53 +152,53 @@ export default function EditorPortal() {
 
     await supabase
       .from("video_edit_tracker")
-      .update({
-        is_playing: newIsPlaying,
-        playing_since: newIsPlaying ? now : null,
-        stage_history: updated,
-        updated_at: now,
-      })
+      .update({ is_playing: newIsPlaying, playing_since: newIsPlaying ? now : null, stage_history: updated, updated_at: now })
       .eq("id", row.id);
 
     setTimeout(loadRows, 300);
   };
 
-  // Group by stage
   const groupedByStage = useMemo(() => {
-    const stageOrder = [
-      "EDIT_ON_PROGRESS", "COLOR_ON_PROGRESS", "RE_EDIT_ON_PROGRESS",
-      "EDIT_LAB", "QUEUE", "COLOR_QUEUE", "COLOR_LAB",
-      "EXPORT_QUEUE", "EXPORTED", "CLIENT_REVIEW", "FINALIZED",
-    ];
+    const stageOrder = ["EDIT_ON_PROGRESS", "COLOR_ON_PROGRESS", "RE_EDIT_ON_PROGRESS", "EDIT_LAB", "QUEUE", "COLOR_QUEUE", "COLOR_LAB", "EXPORT_QUEUE", "EXPORTED", "CLIENT_REVIEW", "FINALIZED"];
     const groups: { key: string; label: string; rows: TrackerRow[] }[] = [];
     for (const sk of stageOrder) {
       const stageRows = rows.filter((r) => (r.video_edit_status || "QUEUE").toUpperCase() === sk);
-      if (stageRows.length > 0) {
-        groups.push({ key: sk, label: STAGE_LABELS[sk] || sk, rows: stageRows });
-      }
+      if (stageRows.length > 0) groups.push({ key: sk, label: STAGE_LABELS[sk] || sk, rows: stageRows });
     }
     return groups;
   }, [rows]);
 
-  // Currently working on
-  const currentEdit = useMemo(() => {
-    return rows.find(
-      (r) =>
-        PROGRESS_STAGES.has((r.video_edit_status || "").toUpperCase()) && r.is_playing
-    );
+  const currentEdit = useMemo(() => rows.find((r) => PROGRESS_STAGES.has((r.video_edit_status || "").toUpperCase()) && r.is_playing), [rows]);
+  const currentInProgress = useMemo(() => {
+    return [...rows].filter((r) => (r.video_edit_status || "") === "EDIT_ON_PROGRESS").sort((a, b) => Number(b.urgency || 0) - Number(a.urgency || 0))[0] || null;
   }, [rows]);
+  const nextUp = useMemo(() => {
+    return [...rows]
+      .filter((r) => ["EDIT_LAB", "QUEUE", "RE_EDIT_ON_PROGRESS", "COLOR_QUEUE"].includes((r.video_edit_status || "").toUpperCase()))
+      .sort((a, b) => Number(b.urgency || 0) - Number(a.urgency || 0))[0] || null;
+  }, [rows]);
+  const lastFinalized = useMemo(() => {
+    return [...rows]
+      .filter((r) => (r.video_edit_status || "").toUpperCase() === "FINALIZED")
+      .sort((a, b) => (b.edit_started_at || "").localeCompare(a.edit_started_at || ""))[0] || null;
+  }, [rows]);
+  const finalizedCount = rows.filter((r) => (r.video_edit_status || "").toUpperCase() === "FINALIZED").length;
+  const reEditCount = rows.filter((r) => (r.video_edit_status || "").toUpperCase() === "RE_EDIT_ON_PROGRESS").length;
 
   if (!editorName) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-background">
-        <p className="text-muted-foreground">Invalid editor link</p>
-      </div>
-    );
+    return <div className="flex items-center justify-center min-h-screen bg-background"><p className="text-muted-foreground">Invalid editor link</p></div>;
   }
+
+  const statCards = [
+    { title: "Current", row: currentInProgress, value: null },
+    { title: "Next Up", row: nextUp, value: null },
+    { title: "Last Finalized", row: lastFinalized, value: null },
+    { title: "Finalized", row: null, value: finalizedCount },
+    { title: "Re-Edits", row: null, value: reEditCount },
+  ];
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
       <div className="sticky top-0 z-10 bg-card border-b">
         <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -223,12 +216,27 @@ export default function EditorPortal() {
 
       <div className="max-w-3xl mx-auto px-4 py-6 space-y-6">
         {isLoading ? (
-          <div className="flex items-center justify-center py-20">
-            <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
-          </div>
+          <div className="flex items-center justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-muted-foreground" /></div>
         ) : (
           <>
-            {/* Currently Working On */}
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+              {statCards.map((card) => (
+                <Card key={card.title}>
+                  <CardContent className="p-4 space-y-1">
+                    <p className="text-xs text-muted-foreground">{card.title}</p>
+                    {card.row ? (
+                      <>
+                        <p className="font-semibold text-sm text-foreground truncate">{card.row.client_name}</p>
+                        <p className="text-xs text-muted-foreground truncate">{card.row.event_name} · {card.row.edit_type}</p>
+                      </>
+                    ) : (
+                      <p className="font-bold text-xl text-foreground">{card.value ?? 0}</p>
+                    )}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+
             {currentEdit && (
               <Card className="border-2 border-green-500/50 shadow-lg shadow-green-500/10">
                 <CardContent className="p-5">
@@ -237,89 +245,51 @@ export default function EditorPortal() {
                       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-500 opacity-75" />
                       <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500" />
                     </span>
-                    <span className="text-xs font-bold text-green-600 dark:text-green-400 uppercase tracking-wider">
-                      Currently Working On
-                    </span>
+                    <span className="text-xs font-bold text-green-600 dark:text-green-400 uppercase tracking-wider">Currently Working On</span>
                   </div>
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between gap-4">
                     <div>
                       <p className="text-lg font-bold text-foreground">{currentEdit.client_name}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {currentEdit.event_name} · {currentEdit.edit_type}
-                      </p>
+                      <p className="text-sm text-muted-foreground">{currentEdit.event_name} · {currentEdit.edit_type}</p>
                       <Badge className={cn("mt-2 text-[10px]", STAGE_COLORS[(currentEdit.video_edit_status || "").toUpperCase()])}>
                         {STAGE_LABELS[(currentEdit.video_edit_status || "").toUpperCase()]}
                       </Badge>
                     </div>
                     <div className="flex flex-col items-center gap-2">
-                      <button
-                        onClick={() => togglePlaying(currentEdit)}
-                        className="w-14 h-14 rounded-full bg-amber-200 dark:bg-amber-800/60 text-amber-700 dark:text-amber-300 flex items-center justify-center shadow-md hover:bg-amber-300 transition-all"
-                        title="Pause"
-                      >
+                      <button onClick={() => togglePlaying(currentEdit)} className="w-14 h-14 rounded-full bg-amber-200 dark:bg-amber-800/60 text-amber-700 dark:text-amber-300 flex items-center justify-center shadow-md hover:bg-amber-300 transition-all" title="Pause">
                         <Pause className="w-7 h-7" />
                       </button>
-                      {currentEdit.edit_started_at && (
-                        <PortalTimer
-                          editStartedAt={currentEdit.edit_started_at}
-                          stageHistory={currentEdit.stage_history}
-                          stageKey={(currentEdit.video_edit_status || "").toUpperCase()}
-                        />
-                      )}
+                      {currentEdit.edit_started_at && <PortalTimer editStartedAt={currentEdit.edit_started_at} stageHistory={currentEdit.stage_history} stageKey={(currentEdit.video_edit_status || "").toUpperCase()} />}
                     </div>
                   </div>
                 </CardContent>
               </Card>
             )}
 
-            {/* Stage groups */}
-            {groupedByStage.map((group) => (
-              <div key={group.key}>
-                <div className="flex items-center gap-2 mb-3">
-                  <h3 className="text-sm font-semibold text-foreground">{group.label}</h3>
-                  <Badge variant="outline" className="text-xs">{group.rows.length}</Badge>
-                </div>
-                <div className="space-y-2">
-                  {group.rows.map((row) => {
-                    const isProgress = PROGRESS_STAGES.has(group.key);
-                    return (
-                      <Card
-                        key={row.id}
-                        className={cn(
-                          "transition-all",
-                          isProgress && row.is_playing && "ring-2 ring-green-400/50 shadow-md",
-                          isProgress && !row.is_playing && "opacity-60"
-                        )}
-                      >
+            {groupedByStage.map((group) => {
+              const isProgress = PROGRESS_STAGES.has(group.key);
+              return (
+                <div key={group.key}>
+                  <div className="flex items-center gap-2 mb-3">
+                    <h3 className="text-sm font-semibold text-foreground">{group.label}</h3>
+                    <Badge variant="outline" className="text-xs">{group.rows.length}</Badge>
+                  </div>
+                  <div className="space-y-2">
+                    {group.rows.map((row) => (
+                      <Card key={row.id} className={cn("transition-all", isProgress && row.is_playing && "ring-2 ring-green-400/50 shadow-md", isProgress && !row.is_playing && "opacity-60")}>
                         <CardContent className="p-4 flex items-center justify-between">
                           <div className="flex-1 min-w-0">
                             <p className="font-semibold text-sm text-foreground">{row.client_name}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {row.sub_event_name || row.event_name} · {row.edit_type}
-                            </p>
-                            {row.urgency && parseInt(row.urgency) >= 3 && (
-                              <Badge className="mt-1 text-[10px] bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">
-                                Urgency: {row.urgency}
-                              </Badge>
-                            )}
-                            {row.edit_started_at && (
-                              <div className="mt-1">
-                                <PortalTimer
-                                  editStartedAt={row.edit_started_at}
-                                  stageHistory={row.stage_history}
-                                  stageKey={group.key}
-                                />
-                              </div>
-                            )}
+                            <p className="text-xs text-muted-foreground">{row.sub_event_name || row.event_name} · {row.edit_type}</p>
+                            {row.urgency && parseInt(row.urgency) >= 3 && <Badge className="mt-1 text-[10px] bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">Urgency: {row.urgency}</Badge>}
+                            {row.edit_started_at && <div className="mt-1"><PortalTimer editStartedAt={row.edit_started_at} stageHistory={row.stage_history} stageKey={group.key} /></div>}
                           </div>
                           {isProgress && (
                             <button
                               onClick={() => togglePlaying(row)}
                               className={cn(
                                 "w-12 h-12 rounded-full flex items-center justify-center shadow-md transition-all",
-                                row.is_playing
-                                  ? "bg-amber-200 dark:bg-amber-800/60 text-amber-700 dark:text-amber-300 hover:bg-amber-300"
-                                  : "bg-green-200 dark:bg-green-800/60 text-green-700 dark:text-green-300 hover:bg-green-300"
+                                row.is_playing ? "bg-amber-200 dark:bg-amber-800/60 text-amber-700 dark:text-amber-300 hover:bg-amber-300" : "bg-green-200 dark:bg-green-800/60 text-green-700 dark:text-green-300 hover:bg-green-300"
                               )}
                               title={row.is_playing ? "Pause" : "Resume"}
                             >
@@ -328,11 +298,11 @@ export default function EditorPortal() {
                           )}
                         </CardContent>
                       </Card>
-                    );
-                  })}
+                    ))}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
 
             {rows.length === 0 && (
               <div className="text-center text-muted-foreground py-20">
@@ -340,18 +310,11 @@ export default function EditorPortal() {
                 <p className="text-sm">No tasks assigned yet</p>
               </div>
             )}
-
           </>
         )}
       </div>
 
-      {/* Floating Facebook-style chat - same as Video Edit Tracker */}
-      <FloatingEditorChat
-        editors={[editorName]}
-        mentionOptions={mentionOptions}
-        senderName={editorName}
-        senderType="editor"
-      />
+      <FloatingEditorChat editors={[editorName]} mentionOptions={mentionOptions} senderName={editorName} senderType="editor" />
     </div>
   );
 }
