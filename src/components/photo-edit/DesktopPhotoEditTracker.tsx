@@ -36,7 +36,7 @@ const STAGE_CARD_COLORS: Record<string, string> = {
   QUEUE: "border-l-gray-400",
   EDIT_LAB: "border-l-blue-400",
   EDIT_ON_PROGRESS: "border-l-blue-600",
-          EXPORTED: "border-l-amber-600",
+  EXPORTED: "border-l-amber-600",
   CLIENT_REVIEW: "border-l-orange-500",
   RE_EDIT_ON_PROGRESS: "border-l-red-500",
   FINALIZED: "border-l-green-500",
@@ -1206,7 +1206,7 @@ function EditorView({ editorName, rowsByStatus, onPushToStatus, onUpdateField, o
       }
     }
     // Running progress cards on top, then paused progress, then rest
-    const PROGRESS_KEYS = new Set(['EDIT_ON_PROGRESS', 'COLOR_ON_PROGRESS', 'RE_EDIT_ON_PROGRESS']);
+    const PROGRESS_KEYS = new Set(['EDIT_ON_PROGRESS', 'RE_EDIT_ON_PROGRESS']);
     result.sort((a, b) => {
       const aHasRunning = PROGRESS_KEYS.has(a.key) && a.rows.some(r => r.isPlaying) ? 2 : PROGRESS_KEYS.has(a.key) ? 1 : 0;
       const bHasRunning = PROGRESS_KEYS.has(b.key) && b.rows.some(r => r.isPlaying) ? 2 : PROGRESS_KEYS.has(b.key) ? 1 : 0;
@@ -1236,6 +1236,7 @@ function EditorView({ editorName, rowsByStatus, onPushToStatus, onUpdateField, o
   const nextEdit = useMemo(() => {
     const combined = [
       ...(rowsByStatus['EDIT_LAB'] || []).filter(r => r.editor === editorName),
+      ...(rowsByStatus['RE_EDIT_ON_PROGRESS'] || []).filter(r => r.editor === editorName),
       ...(rowsByStatus['QUEUE'] || []).filter(r => r.editor === editorName),
     ];
     if (!combined.length) return null;
