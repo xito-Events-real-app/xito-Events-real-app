@@ -2100,6 +2100,33 @@ export function DesktopPhotoEditTracker() {
                           Editor: {filterEditor} <X className="w-3 h-3" />
                         </Badge>
                       )}
+                      {filterPhotographer && (
+                        <Badge variant="secondary" className="gap-1 text-xs cursor-pointer" onClick={() => setFilterPhotographer(null)}>
+                          Photographer: {filterPhotographer} <X className="w-3 h-3" />
+                        </Badge>
+                      )}
+                      <Select value={filterPhotographer || "all"} onValueChange={(v) => setFilterPhotographer(v === "all" ? null : v)}>
+                        <SelectTrigger className="w-40 h-7 text-xs"><SelectValue placeholder="Photographer" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All Photographers</SelectItem>
+                          {uniquePhotographerNames.map(n => <SelectItem key={n} value={n}>{n}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                      <div className="inline-flex items-center gap-1">
+                        {PHOTO_ROLE_CODES.map(code => (
+                          <button
+                            key={code}
+                            onClick={() => setFilterRole(prev => prev === code ? null : code)}
+                            className={`px-2 py-0.5 rounded-md text-[11px] font-semibold border transition-all ${
+                              filterRole === code
+                                ? `${ROLE_PILL_CLASS[code]} ring-2 ring-foreground/30`
+                                : `${ROLE_PILL_CLASS[code]} opacity-60 hover:opacity-100`
+                            }`}
+                          >
+                            {ROLE_LABEL[code]} ({code})
+                          </button>
+                        ))}
+                      </div>
                       <Select value={filterYear?.toString() || "all"} onValueChange={(v) => setFilterYear(v === "all" ? null : Number(v))}>
                         <SelectTrigger className="w-28 h-7 text-xs"><SelectValue placeholder="Year" /></SelectTrigger>
                         <SelectContent>
