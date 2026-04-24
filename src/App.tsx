@@ -48,6 +48,8 @@ import PCloudDrive from "./pages/PCloudDrive";
 import BarunsResearch from "./pages/BarunsResearch";
 import ClientPortal from "./pages/ClientPortal";
 import EditorPortal from "./pages/EditorPortal";
+import PhotoEditTracker from "./pages/PhotoEditTracker";
+import PhotoEditorPortal from "./pages/PhotoEditorPortal";
 import XitoGlobal from "./pages/XitoGlobal";
 import XitoGlobalVenues from "./pages/XitoGlobalVenues";
 import XitoGlobalEventDetailsQuestions from "./pages/XitoGlobalEventDetailsQuestions";
@@ -73,7 +75,7 @@ function WtnFilesAnnouncement() {
   return <WtnFilesAnnouncementDialog user={user} onNavigate={() => navigate('/files?section=files')} />;
 }
 
-const PUBLIC_PREFIXES = ['/client-portal', '/crew-schedule', '/editor-portal', '/client-form', '/login'];
+const PUBLIC_PREFIXES = ['/client-portal', '/crew-schedule', '/editor-portal', '/photo-editor-portal', '/client-form', '/login'];
 
 function isPublicRoute() {
   return PUBLIC_PREFIXES.some(p => window.location.pathname.startsWith(p));
@@ -126,6 +128,7 @@ const App = () => (
               <Route path="/client-portal/:clientName/:clientId" element={<ClientPortal />} />
               <Route path="/crew-schedule/:freelancerName" element={<CrewSchedule />} />
               <Route path="/editor-portal/:editorName" element={<EditorPortal />} />
+              <Route path="/photo-editor-portal/:editorName" element={<PhotoEditorPortal />} />
               <Route path="/login" element={<Login />} />
               
               {/* Protected routes */}
@@ -154,7 +157,7 @@ const App = () => (
               <Route path="/tasks" element={<ProtectedRoute><DailyTasks /></ProtectedRoute>} />
                <Route path="/video-edit" element={<ProtectedRoute><VideoEditTracker /></ProtectedRoute>} />
                <Route path="/xito-transfer" element={<ProtectedRoute><XitoTransfer /></ProtectedRoute>} />
-              <Route path="/photo-edit" element={<ProtectedRoute><ComingSoon moduleId="photo-edit-tracker" /></ProtectedRoute>} />
+               <Route path="/photo-edit" element={<ProtectedRoute><PhotoEditTracker /></ProtectedRoute>} />
               <Route path="/files" element={<ProtectedRoute><FileManagement /></ProtectedRoute>} />
               <Route path="/files/client/:clientId" element={<ProtectedRoute><FileClientDetail /></ProtectedRoute>} />
               <Route path="/media" element={<ProtectedRoute><ComingSoon moduleId="album-media" /></ProtectedRoute>} />
