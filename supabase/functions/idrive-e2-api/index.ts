@@ -10,15 +10,17 @@ const corsHeaders = {
 const encoder = new TextEncoder();
 
 async function hmacSha256(key: ArrayBuffer | Uint8Array, data: string): Promise<ArrayBuffer> {
+  const keyBuffer = key instanceof Uint8Array ? key.slice().buffer : key;
   const cryptoKey = await crypto.subtle.importKey(
-    "raw", key, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]
+    "raw", keyBuffer, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]
   );
   return crypto.subtle.sign("HMAC", cryptoKey, encoder.encode(data));
 }
 
 async function sha256Hex(data: string | Uint8Array): Promise<string> {
   const buf = typeof data === "string" ? encoder.encode(data) : data;
-  const hash = await crypto.subtle.digest("SHA-256", buf);
+  const digestInput = buf instanceof Uint8Array ? buf.slice().buffer : buf;
+  const hash = await crypto.subtle.digest("SHA-256", digestInput);
   return hexEncode(new Uint8Array(hash));
 }
 
@@ -588,8 +590,9 @@ serve(async (req) => {
       status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {
+    const message = err instanceof Error ? err.message : "Internal error";
     console.error("cloudflare-r2-api error:", err);
-    return new Response(JSON.stringify({ error: err.message || "Internal error" }), {
+    return new Response(JSON.stringify({ error: message }), {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
