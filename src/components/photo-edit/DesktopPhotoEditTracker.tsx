@@ -1683,6 +1683,8 @@ export function DesktopPhotoEditTracker() {
   const [filterMonth, setFilterMonth] = useState<number | null>(null);
   const [sortMode, setSortMode] = useState<SortMode>('default');
   const [filterEditor, setFilterEditor] = useState<string | null>(null);
+  const [filterPhotographer, setFilterPhotographer] = useState<string | null>(null);
+  const [filterRole, setFilterRole] = useState<string | null>(null);
   const [activeDesktopTab, setActiveDesktopTab] = useState<string>("QUEUE");
   const [pipelineInitialStage, setPipelineInitialStage] = useState<string | undefined>();
   const [searchOpen, setSearchOpen] = useState(false);
@@ -1741,7 +1743,7 @@ export function DesktopPhotoEditTracker() {
     setSearchQuery('');
   }, []);
 
-  const hasFilters = !!(filterClient || filterEditType || filterYear || filterMonth || filterEditor);
+  const hasFilters = !!(filterClient || filterEditType || filterYear || filterMonth || filterEditor || filterPhotographer || filterRole);
   const hasSortOrFilter = hasFilters || sortMode !== 'default';
 
   useEffect(() => {
@@ -1838,10 +1840,10 @@ export function DesktopPhotoEditTracker() {
   const filteredRowsByStatus = useMemo(() => {
     const result: Record<string, DisplayRow[]> = {};
     for (const stage of STAGES) {
-      result[stage.key] = applyFiltersAndSort(rowsByStatus[stage.key] || [], filterClient, filterEditType, filterYear, filterMonth, sortMode, filterEditor);
+      result[stage.key] = applyFiltersAndSort(rowsByStatus[stage.key] || [], filterClient, filterEditType, filterYear, filterMonth, sortMode, filterEditor, filterPhotographer, filterRole);
     }
     return result;
-  }, [rowsByStatus, filterClient, filterEditType, filterYear, filterMonth, sortMode, filterEditor]);
+  }, [rowsByStatus, filterClient, filterEditType, filterYear, filterMonth, sortMode, filterEditor, filterPhotographer, filterRole]);
 
   // Pipeline position map
   const pipelinePosMap = useMemo(() => {
@@ -1859,7 +1861,15 @@ export function DesktopPhotoEditTracker() {
     rows.map(r => ({ ...r, _pipelinePos: pipelinePosMap[r.id] || 0 }));
 
   const totalCount = STAGES.reduce((sum, s) => sum + (rowsByStatus[s.key]?.length || 0), 0);
-  const clearAll = () => { setFilterClient(null); setFilterEditType(null); setFilterYear(null); setFilterMonth(null); setFilterEditor(null); setSortMode('default'); };
+  const clearAll = () => { setFilterClient(null); setFilterEditType(null); setFilterYear(null); setFilterMonth(null); setFilterEditor(null); setFilterPhotographer(null); setFilterRole(null); setSortMode('default'); };
+
+  const uniquePhotographerNames = useMemo(() => {
+    const names = new Set<string>();
+    for (const stage of STAGES) {
+      (rowsByStatus[stage.key] || []).forEach(r => { if (r.photographerName) names.add(r.photographerName); });
+    }
+    return Array.from(names).sort();
+  }, [rowsByStatus]);
 
   const filteredClientSummary = useMemo(() => {
     const total = STAGES.reduce((sum, stage) => sum + (filteredRowsByStatus[stage.key]?.length || 0), 0);
