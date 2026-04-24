@@ -4,7 +4,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Video, Loader2, Ungroup, Group, X, Filter, ArrowUpDown, ArrowUp, ArrowDown, Flame, Workflow, MessageSquare, ArrowLeft } from "lucide-react";
+import { Image, Loader2, Ungroup, Group, X, Filter, ArrowUpDown, ArrowUp, ArrowDown, Flame, Workflow, MessageSquare, ArrowLeft } from "lucide-react";
 import { PhotoPipelineView } from "./PhotoPipelineView";
 import { EditorChatSection } from "@/components/video-edit/EditorChat";
 import { supabase } from "@/integrations/supabase/client";
@@ -276,7 +276,7 @@ export function MobilePhotoEditTracker() {
       <div className="sticky top-0 z-10 bg-card border-b px-4 py-3">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-red-500 to-pink-600 flex items-center justify-center">
-            <Video className="w-4 h-4 text-white" />
+            <Image className="w-4 h-4 text-white" />
           </div>
           <h1 className="text-base font-bold text-foreground flex-1">Photo Edit</h1>
           <Button

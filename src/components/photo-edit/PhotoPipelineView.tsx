@@ -4,7 +4,7 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
-import { X, Filter, Flame, ArrowUpDown, ArrowUp, ArrowDown, GripVertical, ChevronDown, ChevronRight, FolderOpen, Timer, CalendarIcon } from "lucide-react";
+import { X, Filter, Flame, ArrowUpDown, ArrowUp, ArrowDown, GripVertical, ChevronDown, ChevronRight, FolderOpen, Timer, CalendarIcon, Image } from "lucide-react";
 import { FileDetailsExpander } from "@/components/video-edit/FileDetailsExpander";
 import { supabase } from "@/integrations/supabase/client";
 import { adToBS, nepaliMonthsEnglish, getBSYearsRange, formatBSDate } from "@/lib/nepali-date";
@@ -104,11 +104,7 @@ const STAGE_BORDER: Record<string, string> = {
   QUEUE: "border-l-gray-400",
   EDIT_LAB: "border-l-blue-400",
   EDIT_ON_PROGRESS: "border-l-blue-600",
-  COLOR_QUEUE: "border-l-purple-400",
-  COLOR_LAB: "border-l-purple-600",
-  COLOR_ON_PROGRESS: "border-l-violet-600",
-  EXPORT_QUEUE: "border-l-amber-400",
-  EXPORTED: "border-l-amber-600",
+          EXPORTED: "border-l-amber-600",
   CLIENT_REVIEW: "border-l-orange-500",
   RE_EDIT_ON_PROGRESS: "border-l-red-500",
   FINALIZED: "border-l-green-500",
@@ -118,11 +114,7 @@ const STAGE_BG: Record<string, string> = {
   QUEUE: "bg-gray-50/80 dark:bg-gray-900/40",
   EDIT_LAB: "bg-blue-50/80 dark:bg-blue-950/40",
   EDIT_ON_PROGRESS: "bg-blue-100/60 dark:bg-blue-900/40",
-  COLOR_QUEUE: "bg-purple-50/80 dark:bg-purple-950/40",
-  COLOR_LAB: "bg-purple-100/60 dark:bg-purple-900/40",
-  COLOR_ON_PROGRESS: "bg-violet-100/60 dark:bg-violet-900/40",
-  EXPORT_QUEUE: "bg-amber-50/80 dark:bg-amber-950/40",
-  EXPORTED: "bg-amber-100/60 dark:bg-amber-900/40",
+          EXPORTED: "bg-amber-100/60 dark:bg-amber-900/40",
   CLIENT_REVIEW: "bg-orange-50/80 dark:bg-orange-950/40",
   RE_EDIT_ON_PROGRESS: "bg-red-50/80 dark:bg-red-950/40",
   FINALIZED: "bg-green-50/80 dark:bg-green-950/40",
@@ -132,11 +124,7 @@ const STAGE_BADGE: Record<string, string> = {
   QUEUE: "bg-gray-200 text-gray-800 dark:bg-gray-700 dark:text-gray-200",
   EDIT_LAB: "bg-blue-200 text-blue-800 dark:bg-blue-800 dark:text-blue-200",
   EDIT_ON_PROGRESS: "bg-blue-300 text-blue-900 dark:bg-blue-700 dark:text-blue-100",
-  COLOR_QUEUE: "bg-purple-200 text-purple-800 dark:bg-purple-800 dark:text-purple-200",
-  COLOR_LAB: "bg-purple-300 text-purple-900 dark:bg-purple-700 dark:text-purple-100",
-  COLOR_ON_PROGRESS: "bg-violet-300 text-violet-900 dark:bg-violet-700 dark:text-violet-100",
-  EXPORT_QUEUE: "bg-amber-200 text-amber-800 dark:bg-amber-800 dark:text-amber-200",
-  EXPORTED: "bg-amber-300 text-amber-900 dark:bg-amber-700 dark:text-amber-100",
+          EXPORTED: "bg-amber-300 text-amber-900 dark:bg-amber-700 dark:text-amber-100",
   CLIENT_REVIEW: "bg-orange-200 text-orange-800 dark:bg-orange-800 dark:text-orange-200",
   RE_EDIT_ON_PROGRESS: "bg-red-200 text-red-800 dark:bg-red-800 dark:text-red-200",
   FINALIZED: "bg-green-200 text-green-800 dark:bg-green-800 dark:text-green-200",
@@ -146,11 +134,7 @@ const CONNECTOR_COLORS: Record<string, string> = {
   QUEUE: "bg-gray-300 dark:bg-gray-600",
   EDIT_LAB: "bg-blue-300 dark:bg-blue-700",
   EDIT_ON_PROGRESS: "bg-blue-400 dark:bg-blue-600",
-  COLOR_QUEUE: "bg-purple-300 dark:bg-purple-700",
-  COLOR_LAB: "bg-purple-400 dark:bg-purple-600",
-  COLOR_ON_PROGRESS: "bg-violet-400 dark:bg-violet-600",
-  EXPORT_QUEUE: "bg-amber-300 dark:bg-amber-700",
-  EXPORTED: "bg-amber-400 dark:bg-amber-600",
+          EXPORTED: "bg-amber-400 dark:bg-amber-600",
   CLIENT_REVIEW: "bg-orange-400 dark:bg-orange-600",
   RE_EDIT_ON_PROGRESS: "bg-red-400 dark:bg-red-600",
   FINALIZED: "bg-green-400 dark:bg-green-600",
@@ -233,8 +217,8 @@ function PipelineCard({
           relative ${expanded ? 'w-[480px] min-w-[480px]' : 'w-[320px] min-w-[320px]'} rounded-xl border-l-4 ${borderCls}
           border border-border ${bgCls} shadow-sm hover:shadow-lg transition-all select-none
           ${isDragging ? 'opacity-40 scale-95 shadow-2xl' : ''}
-          ${['EDIT_ON_PROGRESS', 'COLOR_ON_PROGRESS', 'RE_EDIT_ON_PROGRESS'].includes(stageKey) && row.isPlaying ? 'animate-editing-glow' : ''}
-          ${['EDIT_ON_PROGRESS', 'COLOR_ON_PROGRESS', 'RE_EDIT_ON_PROGRESS'].includes(stageKey) && !row.isPlaying ? 'opacity-60' : ''}
+          ${['EDIT_ON_PROGRESS', 'RE_EDIT_ON_PROGRESS'].includes(stageKey) && row.isPlaying ? 'animate-editing-glow' : ''}
+          ${['EDIT_ON_PROGRESS', 'RE_EDIT_ON_PROGRESS'].includes(stageKey) && !row.isPlaying ? 'opacity-60' : ''}
         `}
       >
         {/* Drag handle */}
