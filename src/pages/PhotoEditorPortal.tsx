@@ -1,28 +1,24 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { EditorNotificationBell } from "@/components/video-edit/EditorNotifications";
 import { FloatingEditorChat } from "@/components/video-edit/FloatingEditorChat";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { Loader2, Play, Pause, Video, Timer } from "lucide-react";
+import { Loader2, Play, Pause, Image, Timer } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface TrackerRow {
   id: string;
   client_name: string | null;
   event_name: string | null;
-  sub_event_name: string | null;
   edit_type: string | null;
   editor: string | null;
-  video_edit_status: string | null;
+  photo_edit_status: string | null;
   urgency: string | null;
   is_playing: boolean;
   playing_since: string | null;
   edit_started_at: string | null;
   stage_history: string;
-  colorist: string | null;
-  company_notes: string | null;
   deadline: string | null;
 }
 
@@ -30,10 +26,6 @@ const STAGE_LABELS: Record<string, string> = {
   QUEUE: "Queue",
   EDIT_LAB: "Edit Lab",
   EDIT_ON_PROGRESS: "Edit on Progress",
-  COLOR_QUEUE: "Color Queue",
-  COLOR_LAB: "Color Lab",
-  COLOR_ON_PROGRESS: "Color on Progress",
-  EXPORT_QUEUE: "Export Queue",
   EXPORTED: "Exported",
   CLIENT_REVIEW: "Client Review",
   RE_EDIT_ON_PROGRESS: "Re-Edit on Progress",
@@ -44,17 +36,13 @@ const STAGE_COLORS: Record<string, string> = {
   QUEUE: "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200",
   EDIT_LAB: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
   EDIT_ON_PROGRESS: "bg-blue-200 text-blue-900 dark:bg-blue-800 dark:text-blue-100",
-  COLOR_QUEUE: "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200",
-  COLOR_LAB: "bg-purple-200 text-purple-900 dark:bg-purple-800 dark:text-purple-100",
-  COLOR_ON_PROGRESS: "bg-violet-200 text-violet-900 dark:bg-violet-800 dark:text-violet-100",
-  EXPORT_QUEUE: "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200",
   EXPORTED: "bg-amber-200 text-amber-900 dark:bg-amber-800 dark:text-amber-100",
   CLIENT_REVIEW: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200",
   RE_EDIT_ON_PROGRESS: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
   FINALIZED: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
 };
 
-const PROGRESS_STAGES = new Set(["EDIT_ON_PROGRESS", "COLOR_ON_PROGRESS", "RE_EDIT_ON_PROGRESS"]);
+const PROGRESS_STAGES = new Set(["EDIT_ON_PROGRESS", "RE_EDIT_ON_PROGRESS"]);
 
 function PortalTimer({ editStartedAt, stageHistory, stageKey }: { editStartedAt: string; stageHistory?: string; stageKey?: string }) {
   const [now, setNow] = useState(Date.now());
@@ -99,7 +87,7 @@ function PortalTimer({ editStartedAt, stageHistory, stageKey }: { editStartedAt:
   );
 }
 
-export default function EditorPortal() {
+export default function PhotoEditorPortal() {
   const { editorName: rawName } = useParams<{ editorName: string }>();
   const editorName = decodeURIComponent(rawName || "");
   const [rows, setRows] = useState<TrackerRow[]>([]);
@@ -108,8 +96,8 @@ export default function EditorPortal() {
 
   const loadRows = useCallback(async () => {
     const { data } = await supabase
-      .from("video_edit_tracker")
-      .select("id, client_name, event_name, sub_event_name, edit_type, editor, video_edit_status, urgency, is_playing, playing_since, edit_started_at, stage_history, colorist, company_notes, deadline")
+      .from("photo_edit_tracker")
+      .select("id, client_name, event_name, edit_type, editor, photo_edit_status, urgency, is_playing, playing_since, edit_started_at, stage_history, deadline")
       .eq("editor", editorName)
       .eq("deleted", false)
       .order("urgency", { ascending: false });
@@ -123,7 +111,7 @@ export default function EditorPortal() {
     (async () => {
       const [{ data: freelancers }, { data: clients }] = await Promise.all([
         supabase.from("freelancers_cache").select("name").order("name"),
-        supabase.from("video_edit_tracker").select("client_name").eq("deleted", false),
+        supabase.from("photo_edit_tracker").select("client_name").eq("deleted", false),
       ]);
       const names = new Set<string>();
       freelancers?.forEach((f: any) => f.name && names.add(f.name));
@@ -134,8 +122,8 @@ export default function EditorPortal() {
 
   useEffect(() => {
     const channel = supabase
-      .channel("editor-portal-tracker")
-      .on("postgres_changes", { event: "*", schema: "public", table: "video_edit_tracker" }, () => setTimeout(loadRows, 500))
+      .channel("photo-editor-portal-tracker")
+      .on("postgres_changes", { event: "*", schema: "public", table: "photo_edit_tracker" }, () => setTimeout(loadRows, 500))
       .subscribe();
 
     return () => {
@@ -151,7 +139,7 @@ export default function EditorPortal() {
     const updated = existing ? `${existing}\n${historyEntry}` : historyEntry;
 
     await supabase
-      .from("video_edit_tracker")
+      .from("photo_edit_tracker")
       .update({ is_playing: newIsPlaying, playing_since: newIsPlaying ? now : null, stage_history: updated, updated_at: now })
       .eq("id", row.id);
 
@@ -159,31 +147,31 @@ export default function EditorPortal() {
   };
 
   const groupedByStage = useMemo(() => {
-    const stageOrder = ["EDIT_ON_PROGRESS", "COLOR_ON_PROGRESS", "RE_EDIT_ON_PROGRESS", "EDIT_LAB", "QUEUE", "COLOR_QUEUE", "COLOR_LAB", "EXPORT_QUEUE", "EXPORTED", "CLIENT_REVIEW", "FINALIZED"];
+    const stageOrder = ["EDIT_ON_PROGRESS", "RE_EDIT_ON_PROGRESS", "EDIT_LAB", "QUEUE", "EXPORTED", "CLIENT_REVIEW", "FINALIZED"];
     const groups: { key: string; label: string; rows: TrackerRow[] }[] = [];
     for (const sk of stageOrder) {
-      const stageRows = rows.filter((r) => (r.video_edit_status || "QUEUE").toUpperCase() === sk);
+      const stageRows = rows.filter((r) => (r.photo_edit_status || "QUEUE").toUpperCase() === sk);
       if (stageRows.length > 0) groups.push({ key: sk, label: STAGE_LABELS[sk] || sk, rows: stageRows });
     }
     return groups;
   }, [rows]);
 
-  const currentEdit = useMemo(() => rows.find((r) => PROGRESS_STAGES.has((r.video_edit_status || "").toUpperCase()) && r.is_playing), [rows]);
+  const currentEdit = useMemo(() => rows.find((r) => PROGRESS_STAGES.has((r.photo_edit_status || "").toUpperCase()) && r.is_playing), [rows]);
   const currentInProgress = useMemo(() => {
-    return [...rows].filter((r) => (r.video_edit_status || "") === "EDIT_ON_PROGRESS").sort((a, b) => Number(b.urgency || 0) - Number(a.urgency || 0))[0] || null;
+    return [...rows].filter((r) => (r.photo_edit_status || "") === "EDIT_ON_PROGRESS").sort((a, b) => Number(b.urgency || 0) - Number(a.urgency || 0))[0] || null;
   }, [rows]);
   const nextUp = useMemo(() => {
     return [...rows]
-      .filter((r) => ["EDIT_LAB", "QUEUE", "RE_EDIT_ON_PROGRESS", "COLOR_QUEUE"].includes((r.video_edit_status || "").toUpperCase()))
+      .filter((r) => ["EDIT_LAB", "QUEUE", "RE_EDIT_ON_PROGRESS"].includes((r.photo_edit_status || "").toUpperCase()))
       .sort((a, b) => Number(b.urgency || 0) - Number(a.urgency || 0))[0] || null;
   }, [rows]);
   const lastFinalized = useMemo(() => {
     return [...rows]
-      .filter((r) => (r.video_edit_status || "").toUpperCase() === "FINALIZED")
+      .filter((r) => (r.photo_edit_status || "").toUpperCase() === "FINALIZED")
       .sort((a, b) => (b.edit_started_at || "").localeCompare(a.edit_started_at || ""))[0] || null;
   }, [rows]);
-  const finalizedCount = rows.filter((r) => (r.video_edit_status || "").toUpperCase() === "FINALIZED").length;
-  const reEditCount = rows.filter((r) => (r.video_edit_status || "").toUpperCase() === "RE_EDIT_ON_PROGRESS").length;
+  const finalizedCount = rows.filter((r) => (r.photo_edit_status || "").toUpperCase() === "FINALIZED").length;
+  const reEditCount = rows.filter((r) => (r.photo_edit_status || "").toUpperCase() === "RE_EDIT_ON_PROGRESS").length;
 
   if (!editorName) {
     return <div className="flex items-center justify-center min-h-screen bg-background"><p className="text-muted-foreground">Invalid editor link</p></div>;
@@ -202,15 +190,14 @@ export default function EditorPortal() {
       <div className="sticky top-0 z-10 bg-card border-b">
         <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-red-500 to-pink-600 flex items-center justify-center">
-              <Video className="w-5 h-5 text-white" />
+            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center">
+              <Image className="w-5 h-5 text-primary-foreground" />
             </div>
             <div>
               <h1 className="text-lg font-bold text-foreground">{editorName}</h1>
-              <p className="text-xs text-muted-foreground">Editor Portal · {rows.length} tasks</p>
+              <p className="text-xs text-muted-foreground">Photo Editor Portal · {rows.length} tasks</p>
             </div>
           </div>
-          <EditorNotificationBell editorName={editorName} />
         </div>
       </div>
 
@@ -251,15 +238,15 @@ export default function EditorPortal() {
                     <div>
                       <p className="text-lg font-bold text-foreground">{currentEdit.client_name}</p>
                       <p className="text-sm text-muted-foreground">{currentEdit.event_name} · {currentEdit.edit_type}</p>
-                      <Badge className={cn("mt-2 text-[10px]", STAGE_COLORS[(currentEdit.video_edit_status || "").toUpperCase()])}>
-                        {STAGE_LABELS[(currentEdit.video_edit_status || "").toUpperCase()]}
+                      <Badge className={cn("mt-2 text-[10px]", STAGE_COLORS[(currentEdit.photo_edit_status || "").toUpperCase()])}>
+                        {STAGE_LABELS[(currentEdit.photo_edit_status || "").toUpperCase()]}
                       </Badge>
                     </div>
                     <div className="flex flex-col items-center gap-2">
-                      <button onClick={() => togglePlaying(currentEdit)} className="w-14 h-14 rounded-full bg-amber-200 dark:bg-amber-800/60 text-amber-700 dark:text-amber-300 flex items-center justify-center shadow-md hover:bg-amber-300 transition-all" title="Pause">
+                      <button onClick={() => togglePlaying(currentEdit)} className="w-14 h-14 rounded-full bg-amber-200 text-amber-700 flex items-center justify-center shadow-md hover:bg-amber-300 transition-all" title="Pause">
                         <Pause className="w-7 h-7" />
                       </button>
-                      {currentEdit.edit_started_at && <PortalTimer editStartedAt={currentEdit.edit_started_at} stageHistory={currentEdit.stage_history} stageKey={(currentEdit.video_edit_status || "").toUpperCase()} />}
+                      {currentEdit.edit_started_at && <PortalTimer editStartedAt={currentEdit.edit_started_at} stageHistory={currentEdit.stage_history} stageKey={(currentEdit.photo_edit_status || "").toUpperCase()} />}
                     </div>
                   </div>
                 </CardContent>
@@ -280,8 +267,8 @@ export default function EditorPortal() {
                         <CardContent className="p-4 flex items-center justify-between">
                           <div className="flex-1 min-w-0">
                             <p className="font-semibold text-sm text-foreground">{row.client_name}</p>
-                            <p className="text-xs text-muted-foreground">{row.sub_event_name || row.event_name} · {row.edit_type}</p>
-                            {row.urgency && parseInt(row.urgency) >= 3 && <Badge className="mt-1 text-[10px] bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">Urgency: {row.urgency}</Badge>}
+                            <p className="text-xs text-muted-foreground">{row.event_name} · {row.edit_type}</p>
+                            {row.urgency && parseInt(row.urgency) >= 3 && <Badge className="mt-1 text-[10px] bg-destructive/10 text-destructive">Urgency: {row.urgency}</Badge>}
                             {row.edit_started_at && <div className="mt-1"><PortalTimer editStartedAt={row.edit_started_at} stageHistory={row.stage_history} stageKey={group.key} /></div>}
                           </div>
                           {isProgress && (
@@ -289,7 +276,7 @@ export default function EditorPortal() {
                               onClick={() => togglePlaying(row)}
                               className={cn(
                                 "w-12 h-12 rounded-full flex items-center justify-center shadow-md transition-all",
-                                row.is_playing ? "bg-amber-200 dark:bg-amber-800/60 text-amber-700 dark:text-amber-300 hover:bg-amber-300" : "bg-green-200 dark:bg-green-800/60 text-green-700 dark:text-green-300 hover:bg-green-300"
+                                row.is_playing ? "bg-amber-200 text-amber-700 hover:bg-amber-300" : "bg-green-200 text-green-700 hover:bg-green-300"
                               )}
                               title={row.is_playing ? "Pause" : "Resume"}
                             >
@@ -306,7 +293,7 @@ export default function EditorPortal() {
 
             {rows.length === 0 && (
               <div className="text-center text-muted-foreground py-20">
-                <Video className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                <Image className="w-12 h-12 mx-auto mb-3 opacity-30" />
                 <p className="text-sm">No tasks assigned yet</p>
               </div>
             )}

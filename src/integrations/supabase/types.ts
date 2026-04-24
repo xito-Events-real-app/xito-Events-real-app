@@ -1282,6 +1282,90 @@ export type Database = {
         }
         Relationships: []
       }
+      photo_edit_tracker: {
+        Row: {
+          client_demand: string | null
+          client_name: string | null
+          company_notes: string | null
+          created_at: string | null
+          deadline: string | null
+          deleted: boolean | null
+          edit_started_at: string | null
+          edit_type: string | null
+          editor: string | null
+          event_date_ad: string | null
+          event_day: string | null
+          event_month: string | null
+          event_name: string | null
+          event_year: string | null
+          id: string
+          is_playing: boolean
+          photo_edit_status: string | null
+          playing_since: string | null
+          reference: string | null
+          registered_date_bs: string | null
+          registered_date_time_ad: string
+          stage_history: string
+          synced_to_sheet: boolean | null
+          updated_at: string | null
+          urgency: string | null
+        }
+        Insert: {
+          client_demand?: string | null
+          client_name?: string | null
+          company_notes?: string | null
+          created_at?: string | null
+          deadline?: string | null
+          deleted?: boolean | null
+          edit_started_at?: string | null
+          edit_type?: string | null
+          editor?: string | null
+          event_date_ad?: string | null
+          event_day?: string | null
+          event_month?: string | null
+          event_name?: string | null
+          event_year?: string | null
+          id?: string
+          is_playing?: boolean
+          photo_edit_status?: string | null
+          playing_since?: string | null
+          reference?: string | null
+          registered_date_bs?: string | null
+          registered_date_time_ad: string
+          stage_history?: string
+          synced_to_sheet?: boolean | null
+          updated_at?: string | null
+          urgency?: string | null
+        }
+        Update: {
+          client_demand?: string | null
+          client_name?: string | null
+          company_notes?: string | null
+          created_at?: string | null
+          deadline?: string | null
+          deleted?: boolean | null
+          edit_started_at?: string | null
+          edit_type?: string | null
+          editor?: string | null
+          event_date_ad?: string | null
+          event_day?: string | null
+          event_month?: string | null
+          event_name?: string | null
+          event_year?: string | null
+          id?: string
+          is_playing?: boolean
+          photo_edit_status?: string | null
+          playing_since?: string | null
+          reference?: string | null
+          registered_date_bs?: string | null
+          registered_date_time_ad?: string
+          stage_history?: string
+          synced_to_sheet?: boolean | null
+          updated_at?: string | null
+          urgency?: string | null
+        }
+        Relationships: []
+      }
       portal_hidden_videos: {
         Row: {
           created_at: string

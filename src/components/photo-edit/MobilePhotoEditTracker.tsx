@@ -1,0 +1,464 @@
+import { useState, useEffect, useMemo } from "react";
+import { usePhotoEditTracker, STAGES, DisplayRow } from "@/hooks/usePhotoEditTracker";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Image, Loader2, Ungroup, Group, X, Filter, ArrowUpDown, ArrowUp, ArrowDown, Flame, Workflow, MessageSquare, ArrowLeft } from "lucide-react";
+import { PhotoPipelineView } from "./PhotoPipelineView";
+import { EditorChatSection } from "@/components/video-edit/EditorChat";
+import { supabase } from "@/integrations/supabase/client";
+import { adToBS, nepaliMonthsEnglish, getBSYearsRange } from "@/lib/nepali-date";
+
+const URGENCY_COLORS: Record<string, string> = {
+  "1": "bg-muted text-muted-foreground",
+  "2": "bg-blue-100 text-blue-800",
+  "3": "bg-yellow-100 text-yellow-800",
+  "4": "bg-orange-100 text-orange-800",
+  "5": "bg-red-100 text-red-800",
+};
+
+function getRowBSDate(row: DisplayRow): { year: number; month: number } | null {
+  if (!row.eventDateAD) return null;
+  try {
+    const d = new Date(row.eventDateAD);
+    if (isNaN(d.getTime())) return null;
+    const bs = adToBS(d);
+    return { year: bs.year, month: bs.month };
+  } catch { return null; }
+}
+
+type SortMode = 'default' | 'urgency' | 'priority-asc' | 'priority-desc';
+
+function applyFilters(
+  rows: DisplayRow[],
+  filterClient: string | null,
+  filterEditType: string | null,
+  filterYear: number | null,
+  filterMonth: number | null,
+  sortMode: SortMode = 'default',
+): DisplayRow[] {
+  let result = rows.filter(row => {
+    if (filterClient && row.clientName !== filterClient) return false;
+    if (filterEditType && row.editType !== filterEditType) return false;
+    if (filterYear || filterMonth) {
+      const bs = getRowBSDate(row);
+      if (!bs) return false;
+      if (filterYear && bs.year !== filterYear) return false;
+      if (filterMonth && bs.month !== filterMonth) return false;
+    }
+    return true;
+  });
+
+  if (sortMode === 'urgency') {
+    result = [...result].sort((a, b) => (parseInt(b.urgency || '0') || 0) - (parseInt(a.urgency || '0') || 0));
+  } else if (sortMode === 'priority-asc') {
+    result = [...result].sort((a, b) => (parseInt(a.priority || '999') || 999) - (parseInt(b.priority || '999') || 999));
+  } else if (sortMode === 'priority-desc') {
+    result = [...result].sort((a, b) => (parseInt(b.priority || '0') || 0) - (parseInt(a.priority || '0') || 0));
+  }
+
+  return result;
+}
+
+function PhotoCard({
+  row,
+  index,
+  onUpdateField,
+  onPushToStatus,
+  onSplit,
+  onMerge,
+  onClickClient,
+  onClickEditType,
+  editors,
+  currentStageKey,
+}: {
+  row: DisplayRow;
+  index: number;
+  onUpdateField: (id: string, field: string, value: string, mergedIds?: string[]) => void;
+  onPushToStatus?: (id: string, status: string, mergedIds?: string[]) => void;
+  onSplit?: (mergeKey: string) => void;
+  onMerge?: (mergeKey: string) => void;
+  onClickClient?: (name: string) => void;
+  onClickEditType?: (type: string) => void;
+  editors: { name: string; isPhotoEditor: boolean }[];
+  currentStageKey: string;
+}) {
+  const urgCls = URGENCY_COLORS[row.urgency] || URGENCY_COLORS["1"];
+  return (
+    <div className="rounded-xl border bg-card p-4 space-y-3">
+      <div className="flex items-start justify-between">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-xs text-muted-foreground font-mono">#{index + 1}</span>
+            {(row as any)._pipelinePos && (
+              <span className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 text-[10px] font-bold">
+                P{(row as any)._pipelinePos}
+              </span>
+            )}
+            <span className={`inline-flex items-center justify-center w-6 h-6 rounded text-xs font-bold ${urgCls}`}>
+              {row.urgency || "-"}
+            </span>
+            <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-foreground/10 text-xs font-bold">
+              {row.priority}
+            </span>
+          </div>
+          <button onClick={() => onClickClient?.(row.clientName)} className="font-semibold text-sm truncate hover:text-primary hover:underline text-left">
+            {row.clientName}
+          </button>
+          <p className="text-xs text-muted-foreground truncate">{row.subEventName || row.eventName}</p>
+        </div>
+        <div className="flex items-center gap-1 shrink-0">
+          <button
+            onClick={() => onClickEditType?.(row.editType)}
+            className="inline-flex items-center px-2 py-0.5 rounded-md bg-accent/10 text-accent text-xs font-medium hover:bg-accent/20"
+          >
+            {row.editType}
+          </button>
+          {row.isMerged && row.mergeKey && (
+            <button onClick={() => onSplit?.(row.mergeKey!)} className="inline-flex items-center justify-center w-6 h-6 rounded hover:bg-muted transition-colors">
+              <Ungroup className="w-3.5 h-3.5 text-muted-foreground" />
+            </button>
+          )}
+          {!row.isMerged && row.canMerge && row.mergeKey && (
+            <button onClick={() => onMerge?.(row.mergeKey!)} className="inline-flex items-center justify-center w-6 h-6 rounded hover:bg-muted transition-colors">
+              <Group className="w-3.5 h-3.5 text-muted-foreground" />
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <Select value={row.urgency || "0"} onValueChange={(v) => onUpdateField(row.id, "urgency", v, row.mergedIds)}>
+          <SelectTrigger className="w-24 h-8 text-xs"><SelectValue placeholder="Urgency" /></SelectTrigger>
+          <SelectContent>
+            {["1", "2", "3", "4", "5"].map(u => <SelectItem key={u} value={u}>Urgency {u}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Select value={row.editor || "unassigned"} onValueChange={(v) => onUpdateField(row.id, "editor", v === "unassigned" ? "" : v, row.mergedIds)}>
+          <SelectTrigger className="flex-1 h-8 text-xs"><SelectValue placeholder="Editor..." /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="unassigned">Unassigned</SelectItem>
+            {editors.filter(e => e.isPhotoEditor && e.name).map(e => <SelectItem key={e.name} value={e.name}>⭐ {e.name}</SelectItem>)}
+            {editors.filter(e => !e.isPhotoEditor && e.name).map(e => <SelectItem key={e.name} value={e.name}>{e.name}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {['COLOR_QUEUE', 'COLOR_LAB', 'COLOR_ON_PROGRESS', 'EXPORT_QUEUE', 'EXPORTED', 'CLIENT_REVIEW', 'RE_EDIT_ON_PROGRESS', 'FINALIZED'].includes(currentStageKey) && (
+        <Select value={row.colorist || "unassigned"} onValueChange={(v) => onUpdateField(row.id, "colorist", v === "unassigned" ? "" : v, row.mergedIds)}>
+          <SelectTrigger className="w-full h-8 text-xs"><SelectValue placeholder="Colorist..." /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="unassigned">Unassigned</SelectItem>
+            {editors.filter(e => e.isPhotoEditor && e.name).map(e => <SelectItem key={e.name} value={e.name}>⭐ {e.name}</SelectItem>)}
+            {editors.filter(e => !e.isPhotoEditor && e.name).map(e => <SelectItem key={e.name} value={e.name}>{e.name}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      )}
+
+      <Select onValueChange={(v) => onPushToStatus?.(row.id, v, row.mergedIds)}>
+        <SelectTrigger className="w-full h-8 text-xs">
+          <SelectValue placeholder="Move to..." />
+        </SelectTrigger>
+        <SelectContent>
+          {STAGES.filter(s => s.key !== currentStageKey).map(s => (
+            <SelectItem key={s.key} value={s.key}>{s.label}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
+
+export function MobilePhotoEditTracker() {
+  const { rowsByStatus, isLoading, updateField, pushToStatus, splitRow, mergeRow } = usePhotoEditTracker();
+  const [editors, setEditors] = useState<{ name: string; isPhotoEditor: boolean }[]>([]);
+  const [showPipeline, setShowPipeline] = useState(false);
+  const [showChat, setShowChat] = useState(false);
+  const [filterClient, setFilterClient] = useState<string | null>(null);
+  const [filterEditType, setFilterEditType] = useState<string | null>(null);
+  const [filterYear, setFilterYear] = useState<number | null>(null);
+  const [filterMonth, setFilterMonth] = useState<number | null>(null);
+  const [sortMode, setSortMode] = useState<SortMode>('default');
+
+  const hasFilters = !!(filterClient || filterEditType || filterYear || filterMonth);
+  const hasSortOrFilter = hasFilters || sortMode !== 'default';
+  const years = getBSYearsRange(-2, 3);
+
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase.from("freelancers_cache").select("name, photo_editor").order("name");
+      if (data) {
+        setEditors(data.filter(f => f.name).map(f => ({ name: f.name!, isPhotoEditor: f.photo_editor?.toUpperCase() === "YES" })));
+      }
+    })();
+  }, []);
+
+  const clientPipelineStats = useMemo(() => {
+    if (!filterClient) return null;
+    const stats: Record<string, number> = {};
+    for (const stage of STAGES) {
+      stats[stage.key] = (rowsByStatus[stage.key] || []).filter(r => r.clientName === filterClient).length;
+    }
+    return stats;
+  }, [filterClient, rowsByStatus]);
+
+  const filteredRowsByStatus = useMemo(() => {
+    const result: Record<string, DisplayRow[]> = {};
+    for (const stage of STAGES) {
+      result[stage.key] = applyFilters(rowsByStatus[stage.key] || [], filterClient, filterEditType, filterYear, filterMonth, sortMode);
+    }
+    return result;
+  }, [rowsByStatus, filterClient, filterEditType, filterYear, filterMonth, sortMode]);
+
+  const pipelinePosMap = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const stage of STAGES) {
+      const stageRows = [...(rowsByStatus[stage.key] || [])].sort(
+        (a, b) => (parseInt(b.urgency || '0') || 0) - (parseInt(a.urgency || '0') || 0)
+      );
+      stageRows.forEach((r, i) => { map[r.id] = i + 1; });
+    }
+    return map;
+  }, [rowsByStatus]);
+
+  const addPipelinePos = (rows: DisplayRow[]) =>
+    rows.map(r => ({ ...r, _pipelinePos: pipelinePosMap[r.id] || 0 }));
+
+  const allFilteredRows = useMemo(() => {
+    if (!hasFilters) return [];
+    const combined: DisplayRow[] = [];
+    for (const stage of STAGES) combined.push(...(filteredRowsByStatus[stage.key] || []));
+    return combined;
+  }, [filteredRowsByStatus, hasFilters]);
+
+  const clearAll = () => { setFilterClient(null); setFilterEditType(null); setFilterYear(null); setFilterMonth(null); setSortMode('default'); };
+
+  const uniqueClientNames = useMemo(() => {
+    const names = new Set<string>();
+    for (const stage of STAGES) {
+      for (const r of rowsByStatus[stage.key] || []) {
+        if (r.clientName) names.add(r.clientName);
+      }
+    }
+    return Array.from(names).sort();
+  }, [rowsByStatus]);
+
+  const photoEditorNames = useMemo(() =>
+    editors.filter(e => e.isPhotoEditor && e.name).map(e => e.name),
+  [editors]);
+
+  // Chat view
+  if (showChat) {
+    return (
+      <div className="min-h-screen bg-background pb-20 flex flex-col">
+        <div className="sticky top-0 z-10 bg-card border-b px-4 py-3">
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="icon" className="w-8 h-8" onClick={() => setShowChat(false)}>
+              <ArrowLeft className="w-4 h-4" />
+            </Button>
+            <MessageSquare className="w-5 h-5 text-primary" />
+            <h1 className="text-base font-bold text-foreground flex-1">Editor Chat</h1>
+          </div>
+        </div>
+        <div className="flex-1 px-4 py-4">
+          <EditorChatSection
+            editors={photoEditorNames}
+            mentionOptions={uniqueClientNames.concat(editors.filter(e => e.name).map(e => e.name))}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-background pb-20">
+      <div className="sticky top-0 z-10 bg-card border-b px-4 py-3">
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-red-500 to-pink-600 flex items-center justify-center">
+            <Image className="w-4 h-4 text-white" />
+          </div>
+          <h1 className="text-base font-bold text-foreground flex-1">Photo Edit</h1>
+          <Button
+            onClick={() => setShowChat(true)}
+            variant="outline"
+            size="icon"
+            className="rounded-full w-8 h-8 p-0"
+          >
+            <MessageSquare className="w-4 h-4" />
+          </Button>
+          <Button
+            onClick={() => setShowPipeline(true)}
+            className="rounded-full w-8 h-8 bg-green-600 hover:bg-green-500 text-white shadow-lg p-0"
+            size="icon"
+          >
+            <Workflow className="w-4 h-4" />
+          </Button>
+        </div>
+      </div>
+
+      {showPipeline && <PhotoPipelineView onClose={() => setShowPipeline(false)} />}
+
+      <div className="px-4 py-4">
+        {isLoading ? (
+          <div className="flex items-center justify-center py-16">
+            <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+          </div>
+        ) : (
+          filterClient ? (
+            /* ── Stacked Client Detail View ── */
+            (() => {
+              const total = STAGES.reduce((s, st) => s + (filteredRowsByStatus[st.key]?.length || 0), 0);
+              const untouched = filteredRowsByStatus['QUEUE']?.length || 0;
+              const finalized = filteredRowsByStatus['FINALIZED']?.length || 0;
+              const onProgress = total - untouched - finalized;
+              return (
+                <div className="space-y-4">
+                  <div className="rounded-lg border bg-card p-2.5 space-y-2">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <Filter className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                      <Badge variant="secondary" className="gap-1 text-[10px] cursor-pointer" onClick={() => setFilterClient(null)}>
+                        {filterClient} <X className="w-2.5 h-2.5" />
+                      </Badge>
+                      {filterEditType && (
+                        <Badge variant="secondary" className="gap-1 text-[10px] cursor-pointer" onClick={() => setFilterEditType(null)}>
+                          {filterEditType} <X className="w-2.5 h-2.5" />
+                        </Badge>
+                      )}
+                      <Button variant="ghost" size="sm" className="h-5 text-[10px] px-1.5" onClick={clearAll}>Clear</Button>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs border-t pt-1.5 flex-wrap">
+                      <span className="font-semibold text-foreground">Total: {total}</span>
+                      <span className="text-muted-foreground">·</span>
+                      <span className={untouched > 0 ? "font-medium text-foreground" : "text-muted-foreground"}>Untouched: {untouched}</span>
+                      <span className="text-muted-foreground">·</span>
+                      <span className={onProgress > 0 ? "font-medium text-orange-600 dark:text-orange-400" : "text-muted-foreground"}>On Progress: {onProgress}</span>
+                      <span className="text-muted-foreground">·</span>
+                      <span className={finalized > 0 ? "font-medium text-green-600 dark:text-green-400" : "text-muted-foreground"}>Finalized: {finalized}</span>
+                    </div>
+                  </div>
+
+                  {STAGES.map(stage => {
+                    const stageRows = filteredRowsByStatus[stage.key] || [];
+                    if (stageRows.length === 0) return null;
+                    return (
+                      <div key={stage.key} className="space-y-2">
+                        <h3 className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                          {stage.label}
+                          <Badge variant="outline" className="text-[10px]">{stageRows.length}</Badge>
+                        </h3>
+                        <div className="space-y-3">
+                          {addPipelinePos(stageRows).map((row, i) => (
+                            <PhotoCard
+                              key={row.id}
+                              row={row}
+                              index={i}
+                              onUpdateField={updateField}
+                              onPushToStatus={pushToStatus}
+                              onSplit={splitRow}
+                              onMerge={mergeRow}
+                              onClickClient={(name) => setFilterClient(prev => prev === name ? null : name)}
+                              onClickEditType={(type) => setFilterEditType(prev => prev === type ? null : type)}
+                              editors={editors}
+                              currentStageKey={stage.key}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {total === 0 && (
+                    <p className="text-center text-sm text-muted-foreground py-8">No rows found for {filterClient}</p>
+                  )}
+                </div>
+              );
+            })()
+          ) : (
+          <Tabs defaultValue="QUEUE">
+            <div className="overflow-x-auto -mx-4 px-4">
+              <TabsList className="w-max mb-2">
+                {STAGES.map(stage => (
+                  <TabsTrigger key={stage.key} value={stage.key} className="text-xs whitespace-nowrap">
+                    {stage.label} ({filteredRowsByStatus[stage.key]?.length || 0})
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </div>
+
+            {/* Filter Bar */}
+            <div className="mb-3 rounded-lg border bg-card p-2.5 space-y-2">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <Filter className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                {filterEditType && (
+                  <Badge variant="secondary" className="gap-1 text-[10px] cursor-pointer" onClick={() => setFilterEditType(null)}>
+                    {filterEditType} <X className="w-2.5 h-2.5" />
+                  </Badge>
+                )}
+                <Select value={filterYear?.toString() || "all"} onValueChange={(v) => setFilterYear(v === "all" ? null : Number(v))}>
+                  <SelectTrigger className="w-20 h-6 text-[10px]"><SelectValue placeholder="Year" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All</SelectItem>
+                    {years.map(y => <SelectItem key={y} value={y.toString()}>{y}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <Select value={filterMonth?.toString() || "all"} onValueChange={(v) => setFilterMonth(v === "all" ? null : Number(v))}>
+                  <SelectTrigger className="w-20 h-6 text-[10px]"><SelectValue placeholder="Month" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All</SelectItem>
+                    {nepaliMonthsEnglish.map((m, i) => <SelectItem key={i} value={(i + 1).toString()}>{m}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <Button
+                  variant={sortMode === 'urgency' ? 'default' : 'outline'}
+                  size="sm" className="h-6 text-[10px] px-2 gap-0.5"
+                  onClick={() => setSortMode(prev => prev === 'urgency' ? 'default' : 'urgency')}
+                >
+                  <Flame className="w-2.5 h-2.5" /> Urgency
+                </Button>
+                <Button
+                  variant={sortMode.startsWith('priority') ? 'default' : 'outline'}
+                  size="sm" className="h-6 text-[10px] px-2 gap-0.5"
+                  onClick={() => setSortMode(prev =>
+                    prev === 'default' ? 'priority-asc' : prev === 'priority-asc' ? 'priority-desc' : prev === 'priority-desc' ? 'default' : 'priority-asc'
+                  )}
+                >
+                  {sortMode === 'priority-asc' ? <ArrowUp className="w-2.5 h-2.5" /> : sortMode === 'priority-desc' ? <ArrowDown className="w-2.5 h-2.5" /> : <ArrowUpDown className="w-2.5 h-2.5" />}
+                  Priority
+                </Button>
+                {hasSortOrFilter && (
+                  <Button variant="ghost" size="sm" className="h-6 text-[10px] px-2" onClick={clearAll}>Clear</Button>
+                )}
+              </div>
+            </div>
+
+            {STAGES.map(stage => (
+              <TabsContent key={stage.key} value={stage.key}>
+                <div className="space-y-3">
+                  {addPipelinePos(filteredRowsByStatus[stage.key] || []).map((row, i) => (
+                    <PhotoCard
+                      key={row.id}
+                      row={row}
+                      index={i}
+                      onUpdateField={updateField}
+                      onPushToStatus={pushToStatus}
+                      onSplit={splitRow}
+                      onMerge={mergeRow}
+                      onClickClient={(name) => setFilterClient(prev => prev === name ? null : name)}
+                      onClickEditType={(type) => setFilterEditType(prev => prev === type ? null : type)}
+                      editors={editors}
+                      currentStageKey={stage.key}
+                    />
+                  ))}
+                  {(filteredRowsByStatus[stage.key]?.length || 0) === 0 && (
+                    <p className="text-center text-sm text-muted-foreground py-8">No items in {stage.label}</p>
+                  )}
+                </div>
+              </TabsContent>
+            ))}
+          </Tabs>
+          )
+        )}
+      </div>
+    </div>
+  );
+}
