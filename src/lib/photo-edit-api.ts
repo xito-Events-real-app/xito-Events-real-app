@@ -38,6 +38,8 @@ const FINALIZED_CUTOFF_YEAR = 2082;
 const FINALIZED_CUTOFF_MONTH = 12;
 
 const ALL_PHOTOS_LABEL = "All Photos";
+const SELECTED_PHOTOS_LABEL = "Selected Photos";
+const INSTA_POST_LABEL = "Insta Post";
 
 const PHOTOGRAPHER_ROLES: { column: string; code: "PB" | "PG" | "EP"; side: string }[] = [
   { column: "photographer_bride", code: "PB", side: "BRIDE SIDE" },
@@ -71,6 +73,11 @@ function isAllPhotos(editType: string | null | undefined): boolean {
   return normalizeEditType(editType).toLowerCase() === "all photos";
 }
 
+function isManagedPhotoEditType(editType: string | null | undefined): boolean {
+  const normalized = normalizeEditType(editType).toLowerCase();
+  return normalized === "all photos" || normalized === "selected photos" || normalized === "insta post";
+}
+
 function isAtOrBeforeChaitra2082(eventYear: string | null | undefined, eventMonth: string | null | undefined): boolean {
   const year = Number(eventYear || 0);
   const month = Number(eventMonth || 0);
@@ -86,6 +93,29 @@ function splitFreelancerNames(value: string | null | undefined): string[] {
     .split(/[,|\n]+/)
     .map((n) => n.trim())
     .filter(Boolean);
+}
+
+function parseJsonRecord(value: string | null | undefined): Record<string, any> {
+  if (!value) return {};
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function parsePhotographerToggleKey(key: string): { role: "PB" | "PG" | "EP" | ""; name: string; side: string } {
+  const [rawRole, ...nameParts] = key.split("::");
+  const role = rawRole?.toUpperCase() as "PB" | "PG" | "EP";
+  const name = nameParts.join("::").trim();
+  const roleMeta = PHOTOGRAPHER_ROLES.find((r) => r.code === role);
+  return { role: roleMeta?.code || "", name, side: roleMeta?.side || "" };
+}
+
+function splitItemNames(value: string | null | undefined, quantity: number): string[] {
+  const names = (value || "").split("|||").map((n) => n.trim());
+  return Array.from({ length: Math.max(0, quantity || 0) }, (_, i) => names[i] || `${INSTA_POST_LABEL} ${i + 1}`);
 }
 
 /** Compose tracker uniqueness key. Identity = event + edit-type + photographer-role + photographer-name. */
@@ -224,8 +254,7 @@ export async function pushPhotoToStatus(id: string, newStatus: string): Promise<
 
 /**
  * Generate one tracker row per assigned photographer for "All Photos" deliverable.
- * Selected Photos / Insta Post are NOT auto-generated — they come from the
- * selection workflow in the deliverables module.
+  * Selected Photos and Insta Post rows are generated from Deliverables options.
  */
 export async function ensurePhotoEditRows(): Promise<number> {
   const today = new Date().toISOString().split("T")[0];
@@ -282,10 +311,10 @@ export async function ensurePhotoEditRows(): Promise<number> {
     assignmentMap.set(`${a.registered_date_time_ad}||${normalizeKeyPart(a.event)}`, a);
   }
 
-  // Existing All-Photos rows for de-duplication
+  // Existing managed photo rows for de-duplication
   const { data: existingRows } = await supabase
     .from("photo_edit_tracker")
-    .select("registered_date_time_ad, event_name, edit_type, photographer_role, photographer_name")
+    .select("registered_date_time_ad, event_name, edit_type, photographer_role, photographer_name, reference")
     .eq("deleted", false);
 
   const existingKeys = new Set(
@@ -295,7 +324,7 @@ export async function ensurePhotoEditRows(): Promise<number> {
         r.event_name || "",
         r.edit_type || "",
         r.photographer_role || "",
-        r.photographer_name || "",
+        r.photographer_name || r.reference || "",
       ),
     ),
   );
@@ -346,6 +375,85 @@ export async function ensurePhotoEditRows(): Promise<number> {
     }
   }
 
+  const { data: deliverables } = await supabase
+    .from("client_deliverables")
+    .select("registered_date_time_ad, event_name, deliverable_type, enabled, quantity, item_names, photographer_toggles, photographer_notes")
+    .eq("section", "photos")
+    .in("deliverable_type", ["selected_photos", "insta_post"])
+    .in("registered_date_time_ad", bookedRegDates);
+
+  const eventMap = new Map<string, any>();
+  for (const ev of bookedEvents) {
+    eventMap.set(`${ev.registered_date_time_ad}||${normalizeKeyPart(ev.event_name)}`, ev);
+  }
+
+  for (const d of deliverables || []) {
+    if (!d.enabled) continue;
+    const ev = eventMap.get(`${d.registered_date_time_ad}||${normalizeKeyPart(d.event_name)}`);
+    const client = bookedMap.get(d.registered_date_time_ad);
+    if (!ev || !client) continue;
+
+    const autoStatus = isAtOrBeforeChaitra2082(ev.event_year, ev.event_month) ? "FINALIZED" : "QUEUE";
+    const baseRow = {
+      registered_date_time_ad: ev.registered_date_time_ad,
+      registered_date_bs: client.registered_date_bs,
+      client_name: client.client_name,
+      event_name: ev.event_name || "",
+      event_year: ev.event_year || "",
+      event_month: ev.event_month || "",
+      event_day: ev.event_day || "",
+      event_date_ad: ev.event_date_ad || "",
+      photo_edit_status: autoStatus,
+      synced_to_sheet: false,
+      stage_history: `${autoStatus} [${new Date().toISOString()}]`,
+    };
+
+    if (d.deliverable_type === "selected_photos") {
+      const toggles = parseJsonRecord(d.photographer_toggles);
+      const notes = parseJsonRecord(d.photographer_notes);
+      for (const [toggleKey, enabled] of Object.entries(toggles)) {
+        if (!enabled) continue;
+        const photographer = parsePhotographerToggleKey(toggleKey);
+        if (!photographer.role || !photographer.name) continue;
+        const compositeKey = makeTrackerCompositeKey(d.registered_date_time_ad, d.event_name || "", SELECTED_PHOTOS_LABEL, photographer.role, photographer.name);
+        if (existingKeys.has(compositeKey)) continue;
+        existingKeys.add(compositeKey);
+        newRows.push({
+          ...baseRow,
+          edit_type: SELECTED_PHOTOS_LABEL,
+          reference: (notes[toggleKey] || photographer.name || "").toString(),
+          client_demand: (notes[toggleKey] || "").toString(),
+          photographer_name: photographer.name,
+          photographer_role: photographer.role,
+          photographer_side: photographer.side,
+        });
+      }
+    }
+
+    if (d.deliverable_type === "insta_post") {
+      const names = splitItemNames(d.item_names, d.quantity || 1);
+      const duplicateCount = new Map<string, number>();
+      for (let idx = 0; idx < names.length; idx++) {
+        const name = names[idx];
+        const normalizedName = normalizeKeyPart(name);
+        const count = (duplicateCount.get(normalizedName) || 0) + 1;
+        duplicateCount.set(normalizedName, count);
+        const reference = count > 1 ? `${name} #${count}` : name;
+        const compositeKey = makeTrackerCompositeKey(d.registered_date_time_ad, d.event_name || "", INSTA_POST_LABEL, "", reference);
+        if (existingKeys.has(compositeKey)) continue;
+        existingKeys.add(compositeKey);
+        newRows.push({
+          ...baseRow,
+          edit_type: INSTA_POST_LABEL,
+          reference,
+          photographer_name: "",
+          photographer_role: "",
+          photographer_side: "",
+        });
+      }
+    }
+  }
+
   if (newRows.length === 0) return 0;
 
   for (let i = 0; i < newRows.length; i += 100) {
@@ -358,27 +466,23 @@ export async function ensurePhotoEditRows(): Promise<number> {
 }
 
 /**
- * Soft-delete auto-generated "All Photos" QUEUE rows whose photographer is
- * no longer present in the assignment for that event. Other edit types
- * (Selected Photos / Insta Post) are owned by the deliverables workflow and
- * are intentionally left untouched here.
+ * Soft-delete managed QUEUE rows that no longer match current assignments or deliverables.
  */
 export async function syncPhotoRowsWithDeliverables(): Promise<number> {
   const today = new Date().toISOString().split("T")[0];
 
   const { data: queueRows } = await supabase
     .from("photo_edit_tracker")
-    .select("id, registered_date_time_ad, event_name, edit_type, photographer_role, photographer_name, event_date_ad")
+    .select("id, registered_date_time_ad, event_name, edit_type, photographer_role, photographer_name, reference, event_date_ad")
     .eq("deleted", false)
     .eq("photo_edit_status", "QUEUE");
 
   if (!queueRows?.length) return 0;
 
-  // Only consider auto-generated All Photos rows
-  const allPhotosRows = queueRows.filter((r) => isAllPhotos(r.edit_type));
-  if (allPhotosRows.length === 0) return 0;
+  const managedRows = queueRows.filter((r) => isManagedPhotoEditType(r.edit_type));
+  if (managedRows.length === 0) return 0;
 
-  const regDates = Array.from(new Set(allPhotosRows.map((r) => r.registered_date_time_ad)));
+  const regDates = Array.from(new Set(managedRows.map((r) => r.registered_date_time_ad)));
   const allAssignments: any[] = [];
   for (let i = 0; i < regDates.length; i += 50) {
     const batch = regDates.slice(i, i + 50);
@@ -402,12 +506,57 @@ export async function syncPhotoRowsWithDeliverables(): Promise<number> {
     assignedSetMap.set(key, set);
   }
 
+  const { data: deliverables } = await supabase
+    .from("client_deliverables")
+    .select("registered_date_time_ad, event_name, deliverable_type, enabled, quantity, item_names, photographer_toggles")
+    .eq("section", "photos")
+    .in("deliverable_type", ["selected_photos", "insta_post"])
+    .in("registered_date_time_ad", regDates);
+
+  const activeDeliverableKeys = new Set<string>();
+  for (const d of deliverables || []) {
+    if (!d.enabled) continue;
+    if (d.deliverable_type === "selected_photos") {
+      const toggles = parseJsonRecord(d.photographer_toggles);
+      for (const [toggleKey, enabled] of Object.entries(toggles)) {
+        if (!enabled) continue;
+        const photographer = parsePhotographerToggleKey(toggleKey);
+        if (!photographer.role || !photographer.name) continue;
+        activeDeliverableKeys.add(makeTrackerCompositeKey(d.registered_date_time_ad, d.event_name || "", SELECTED_PHOTOS_LABEL, photographer.role, photographer.name));
+      }
+    }
+    if (d.deliverable_type === "insta_post") {
+      const names = splitItemNames(d.item_names, d.quantity || 1);
+      const duplicateCount = new Map<string, number>();
+      for (const name of names) {
+        const normalizedName = normalizeKeyPart(name);
+        const count = (duplicateCount.get(normalizedName) || 0) + 1;
+        duplicateCount.set(normalizedName, count);
+        const reference = count > 1 ? `${name} #${count}` : name;
+        activeDeliverableKeys.add(makeTrackerCompositeKey(d.registered_date_time_ad, d.event_name || "", INSTA_POST_LABEL, "", reference));
+      }
+    }
+  }
+
   const toDelete: string[] = [];
-  for (const row of allPhotosRows) {
+  for (const row of managedRows) {
     if ((row.event_date_ad || "") > today) {
       toDelete.push(row.id);
       continue;
     }
+    const editType = normalizeEditType(row.edit_type);
+    if (editType === SELECTED_PHOTOS_LABEL || editType === INSTA_POST_LABEL) {
+      const rowKey = makeTrackerCompositeKey(
+        row.registered_date_time_ad,
+        row.event_name || "",
+        editType,
+        row.photographer_role || "",
+        row.photographer_name || row.reference || "",
+      );
+      if (!activeDeliverableKeys.has(rowKey)) toDelete.push(row.id);
+      continue;
+    }
+
     const assignmentKey = `${row.registered_date_time_ad}||${normalizeKeyPart(row.event_name || "")}`;
     const assignedSet = assignedSetMap.get(assignmentKey);
     if (!assignedSet) {

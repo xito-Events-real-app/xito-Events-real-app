@@ -1,94 +1,62 @@
-# Photo Edit Tracker — Photographer-based rows + Photo file expander
+Plan to fix the deliverables-to-photo-tracker mistake:
 
-Two changes to make the Photo Edit Tracker behave like a true photo workflow:
+## What will change
 
-## 1. Expandable row should show PHOTOS, not videos
+1. Keep current **All Photos** behavior
+   - All Photos stays photographer-based from freelancer assignments.
+   - Example: one event with PB, PG, EP creates 3 All Photos rows.
 
-The dropdown/expander on each row currently re-uses `FileDetailsExpander`, which is hard-coded to video roles (VB/VG/EV/DRONE/FPV/IPHONE) and shows "Video Size".
+2. Add **Selected Photos** tracker rows from deliverables switches
+   - When **Selected Photos** is enabled in Deliverables, only photographers whose switch is ON will create rows in Photo Edit Tracker.
+   - Each selected photographer creates one row:
+     - `edit_type`: `Selected Photos`
+     - `photographer_name`: selected photographer name
+     - `photographer_role`: PB / PG / EP
+     - `photographer_side`: Bride Side / Groom Side / Extra
+     - `reference`: photographer note if available, otherwise photographer name
+   - If a photographer switch is turned OFF later, only that matching QUEUE row will be soft-deleted.
 
-**New component**: `src/components/photo-edit/PhotoFileDetailsExpander.tsx` — a dedicated photo version that:
-- Filters `files_management` to photo roles only: **PB, PG, EP**
-- Shows "**Photo Size: X GB**" instead of "Video Size"
-- Lists photographers in a table with the same columns (Role, Freelancer, Side, Card, Size, Format, Copied By, 1x/2x/3x/☁, Path)
-- "ALL VIDEO FILES COPIED" → "ALL PHOTO FILES COPIED"
+3. Add **Insta Post** tracker rows from deliverables quantity + names
+   - When **Insta Posts** is enabled in Deliverables, the number of rows will follow the Insta Post quantity.
+   - Each named post creates one tracker row:
+     - `edit_type`: `Insta Post`
+     - `reference`: the Insta Post name, e.g. `Bride Entry`, `Ring Ceremony`, etc.
+     - no photographer role unless the deliverable stores one later
+   - If the quantity is reduced or a name changes, stale QUEUE rows will be soft-deleted and new needed rows will be created.
 
-Swap `FileDetailsExpander` → `PhotoFileDetailsExpander` in:
-- `DesktopPhotoEditTracker.tsx` (line 699)
-- `PhotoPipelineView.tsx` (line 343)
-- `MobilePhotoEditTracker.tsx` (if used there)
+4. Update sync logic safely
+   - `ensurePhotoEditRows()` will generate:
+     - All Photos from assigned photographers
+     - Selected Photos from enabled photographer toggles
+     - Insta Post from enabled quantity/names
+   - `syncPhotoRowsWithDeliverables()` will clean QUEUE rows that no longer match current deliverables.
+   - Rows already moved past QUEUE will not be deleted automatically, so in-progress work is protected.
 
-## 2. Queue rows must be per-photographer (only for "All Photos")
+## Technical details
 
-Today: photo tracker creates **1 row per enabled photo deliverable** (e.g. one "All Photos" row per event).
+- Read `client_deliverables` rows where `section = 'photos'` and type is `selected_photos` or `insta_post`.
+- Parse `photographer_toggles` JSON for Selected Photos.
+- Parse `photographer_notes` JSON for Selected Photos row reference/notes.
+- Parse `item_names` split by `|||` for Insta Post names.
+- Reuse the existing composite key:
 
-New behavior: **only the "All Photos" deliverable** generates per-photographer rows. "Selected Photos" and "Insta Post" continue to be created via the existing selection button in the deliverables module — the tracker does **not** auto-generate rows for them.
-
-### New row generation logic (rewrite `ensurePhotoEditRows` + `syncPhotoRowsWithDeliverables`)
-
-For each booked event past today:
-1. Read `freelancer_assignments` for that event → grab `photographer_bride`, `photographer_groom`, `extra_photographer` (each may be empty / comma-separated for multiple EPs).
-2. For each non-empty photographer, generate **one "All Photos" tracker row** with:
-   - `edit_type` = `"All Photos"`
-   - `reference` = photographer name
-   - New persisted fields (see DB migration):
-     - `photographer_name` text
-     - `photographer_role` text — one of `PB` / `PG` / `EP`
-     - `photographer_side` text — `BRIDE SIDE`, `GROOM SIDE`, or `` for EP
-3. **Skip** any other deliverable types (`selected_photos`, `insta_post`) — those rows are created by the deliverables selection workflow as they are today.
-4. Composite uniqueness key for "already exists" check becomes:
-   `registered_date_time_ad || event_name || edit_type || photographer_role || photographer_name`
-
-### Sync behavior
-`syncPhotoRowsWithDeliverables` is rewritten so:
-- "All Photos" rows are soft-deleted when the corresponding photographer is removed from `freelancer_assignments` (e.g. PB cleared → that row goes away).
-- Non-"All Photos" rows (selected/insta) are left untouched — they remain owned by the deliverables selection workflow.
-
-## 3. New columns in the Queue table (and other stages)
-
-In `DesktopPhotoEditTracker.tsx` `PhotoEditTable`, add **two new columns immediately after "Event"**:
-
-| Photographer | Role |
-|---|---|
-| Lajja Uprety | Bride Side (PB) |
-
-- **Photographer** column: shows `row.photographerName` (falls back to `row.reference`).
-- **Role** column: colored pill:
-  - **PB** → `Bride Side` — pink/rose pill (`bg-pink-100 text-pink-800 border-pink-300`)
-  - **PG** → `Groom Side` — sky/blue pill (`bg-sky-100 text-sky-800 border-sky-300`)
-  - **EP** → `Extra` — amber pill (`bg-amber-100 text-amber-800 border-amber-300`)
-
-Non-"All Photos" rows (selected/insta) won't have a photographer → both cells render `—`.
-
-Mirror the same data in `MobilePhotoEditTracker.tsx` cards (small badge under event name) and `PhotoPipelineView.tsx` cards.
-
-## 4. Filters
-
-Add new filter dropdowns next to the existing client/edit-type/year/month/editor filters:
-- **Photographer** filter (distinct names from current rows).
-- **Side / Role** filter with three colored chips: Bride Side / Groom Side / Extra. Same colors as the column pill.
-
-Wire both into `applyFiltersAndSort`.
-
-## 5. Database migration
-
-```sql
-ALTER TABLE public.photo_edit_tracker
-  ADD COLUMN IF NOT EXISTS photographer_name text NOT NULL DEFAULT '',
-  ADD COLUMN IF NOT EXISTS photographer_role text NOT NULL DEFAULT '',
-  ADD COLUMN IF NOT EXISTS photographer_side text NOT NULL DEFAULT '';
-
-CREATE INDEX IF NOT EXISTS idx_photo_edit_tracker_photographer
-  ON public.photo_edit_tracker (photographer_role, photographer_name);
+```text
+registered_date_time_ad || event_name || edit_type || photographer_role || photographer_name/reference
 ```
 
-Existing auto-generated "All Photos" rows are soft-deleted (`UPDATE photo_edit_tracker SET deleted = true WHERE edit_type ILIKE 'All Photos'`) so the new logic regenerates them cleanly per-photographer on next load. Selected-photos / insta-post rows are preserved.
+- For Insta Posts, use a deterministic key based on the post name/index so multiple insta rows can exist per event.
+- No new database columns are needed; existing `photographer_name`, `photographer_role`, `photographer_side`, and `reference` are enough.
 
-## Files touched
+## Files to update
 
-- New: `src/components/photo-edit/PhotoFileDetailsExpander.tsx`
-- Edited: `src/lib/photo-edit-api.ts` (rewrite ensure/sync, add fields, change composite key, restrict generation to "All Photos")
-- Edited: `src/hooks/usePhotoEditTracker.ts` (expose new fields on `PhotoEditRow`)
-- Edited: `src/components/photo-edit/DesktopPhotoEditTracker.tsx` (columns, filters, expander swap, color pills)
-- Edited: `src/components/photo-edit/MobilePhotoEditTracker.tsx` (badge under event)
-- Edited: `src/components/photo-edit/PhotoPipelineView.tsx` (badge + expander swap)
-- Migration: add 3 columns + soft-delete existing "All Photos" rows
+- `src/lib/photo-edit-api.ts`
+  - Extend row generation and cleanup logic.
+- `src/components/client-detail/DeliverablesSection.tsx`
+  - Improve photographer parsing for comma-separated EP names if needed, so Selected Photos toggles map correctly.
+
+## Expected result
+
+- All Photos: rows come from all assigned photographers.
+- Selected Photos: rows come only from photographers switched ON inside Deliverables.
+- Insta Posts: rows come from the number and names entered inside Deliverables.
+- Photo Edit Tracker will match how Deliverables is actually configured.

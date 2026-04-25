@@ -95,8 +95,9 @@ function getPhotographersForEvent(eventName: string, assignments?: FreelancerAss
 
   for (const { code, field } of order) {
     const val = match[field] as string;
-    if (val && val.trim()) {
-      photographers.push({ code, name: val.trim(), key: `${code}::${val.trim()}` });
+    const names = (val || '').split(/[,|\n]+/).map(name => name.trim()).filter(Boolean);
+    for (const name of names) {
+      photographers.push({ code, name, key: `${code}::${name}` });
     }
   }
   return photographers;
