@@ -466,27 +466,23 @@ export async function ensurePhotoEditRows(): Promise<number> {
 }
 
 /**
- * Soft-delete auto-generated "All Photos" QUEUE rows whose photographer is
- * no longer present in the assignment for that event. Other edit types
- * (Selected Photos / Insta Post) are owned by the deliverables workflow and
- * are intentionally left untouched here.
+ * Soft-delete managed QUEUE rows that no longer match current assignments or deliverables.
  */
 export async function syncPhotoRowsWithDeliverables(): Promise<number> {
   const today = new Date().toISOString().split("T")[0];
 
   const { data: queueRows } = await supabase
     .from("photo_edit_tracker")
-    .select("id, registered_date_time_ad, event_name, edit_type, photographer_role, photographer_name, event_date_ad")
+    .select("id, registered_date_time_ad, event_name, edit_type, photographer_role, photographer_name, reference, event_date_ad")
     .eq("deleted", false)
     .eq("photo_edit_status", "QUEUE");
 
   if (!queueRows?.length) return 0;
 
-  // Only consider auto-generated All Photos rows
-  const allPhotosRows = queueRows.filter((r) => isAllPhotos(r.edit_type));
-  if (allPhotosRows.length === 0) return 0;
+  const managedRows = queueRows.filter((r) => isManagedPhotoEditType(r.edit_type));
+  if (managedRows.length === 0) return 0;
 
-  const regDates = Array.from(new Set(allPhotosRows.map((r) => r.registered_date_time_ad)));
+  const regDates = Array.from(new Set(managedRows.map((r) => r.registered_date_time_ad)));
   const allAssignments: any[] = [];
   for (let i = 0; i < regDates.length; i += 50) {
     const batch = regDates.slice(i, i + 50);
@@ -510,12 +506,57 @@ export async function syncPhotoRowsWithDeliverables(): Promise<number> {
     assignedSetMap.set(key, set);
   }
 
+  const { data: deliverables } = await supabase
+    .from("client_deliverables")
+    .select("registered_date_time_ad, event_name, deliverable_type, enabled, quantity, item_names, photographer_toggles")
+    .eq("section", "photos")
+    .in("deliverable_type", ["selected_photos", "insta_post"])
+    .in("registered_date_time_ad", regDates);
+
+  const activeDeliverableKeys = new Set<string>();
+  for (const d of deliverables || []) {
+    if (!d.enabled) continue;
+    if (d.deliverable_type === "selected_photos") {
+      const toggles = parseJsonRecord(d.photographer_toggles);
+      for (const [toggleKey, enabled] of Object.entries(toggles)) {
+        if (!enabled) continue;
+        const photographer = parsePhotographerToggleKey(toggleKey);
+        if (!photographer.role || !photographer.name) continue;
+        activeDeliverableKeys.add(makeTrackerCompositeKey(d.registered_date_time_ad, d.event_name || "", SELECTED_PHOTOS_LABEL, photographer.role, photographer.name));
+      }
+    }
+    if (d.deliverable_type === "insta_post") {
+      const names = splitItemNames(d.item_names, d.quantity || 1);
+      const duplicateCount = new Map<string, number>();
+      for (const name of names) {
+        const normalizedName = normalizeKeyPart(name);
+        const count = (duplicateCount.get(normalizedName) || 0) + 1;
+        duplicateCount.set(normalizedName, count);
+        const reference = count > 1 ? `${name} #${count}` : name;
+        activeDeliverableKeys.add(makeTrackerCompositeKey(d.registered_date_time_ad, d.event_name || "", INSTA_POST_LABEL, "", reference));
+      }
+    }
+  }
+
   const toDelete: string[] = [];
-  for (const row of allPhotosRows) {
+  for (const row of managedRows) {
     if ((row.event_date_ad || "") > today) {
       toDelete.push(row.id);
       continue;
     }
+    const editType = normalizeEditType(row.edit_type);
+    if (editType === SELECTED_PHOTOS_LABEL || editType === INSTA_POST_LABEL) {
+      const rowKey = makeTrackerCompositeKey(
+        row.registered_date_time_ad,
+        row.event_name || "",
+        editType,
+        row.photographer_role || "",
+        row.photographer_name || row.reference || "",
+      );
+      if (!activeDeliverableKeys.has(rowKey)) toDelete.push(row.id);
+      continue;
+    }
+
     const assignmentKey = `${row.registered_date_time_ad}||${normalizeKeyPart(row.event_name || "")}`;
     const assignedSet = assignedSetMap.get(assignmentKey);
     if (!assignedSet) {
