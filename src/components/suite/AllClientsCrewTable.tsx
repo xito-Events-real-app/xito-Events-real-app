@@ -84,6 +84,50 @@ const PILL_STYLES = {
   tech: 'bg-cyan-50 text-cyan-700 border-cyan-200',
 };
 
+const EVENT_DETAIL_SELECT = 'event_index,event_name,event_year,event_month,event_day,event_date_ad,venue_name,venue_type,venue_city,venue_area,venue_map,parlour_name,parlour_type,parlour_city,parlour_area,parlour_map,event_start_time,event_end_time,bride_start_time,bride_end_time,groom_start_time,groom_end_time,parlour_start_time,parlour_end_time,do_groom_come_in_mehndi,guest_count';
+
+function normalizeEventIdentity(value: string | null | undefined): string {
+  return (value || '').trim().replace(/\s+/g, ' ').toUpperCase();
+}
+
+function getExpandedCacheKey(row: FreelancerAssignment): string {
+  return `${row.registeredDateTimeAD}__${row.eventDateAD || ''}__${normalizeEventIdentity(row.event)}`;
+}
+
+async function fetchEventDetailForExpandedRow(row: FreelancerAssignment) {
+  const normalizedRowEvent = normalizeEventIdentity(row.event);
+
+  if (row.eventDateAD) {
+    const { data: exactRows } = await supabase
+      .from('event_details_cache')
+      .select(EVENT_DETAIL_SELECT)
+      .eq('registered_date_time_ad', row.registeredDateTimeAD)
+      .eq('event_date_ad', row.eventDateAD);
+
+    const exactByName = (exactRows || []).find((detail: any) => normalizeEventIdentity(detail.event_name) === normalizedRowEvent);
+    if (exactByName) return exactByName;
+    if ((exactRows || []).length === 1) return exactRows?.[0] || null;
+  }
+
+  const { data: allRows } = await supabase
+    .from('event_details_cache')
+    .select(EVENT_DETAIL_SELECT)
+    .eq('registered_date_time_ad', row.registeredDateTimeAD);
+
+  const candidates = allRows || [];
+  if (candidates.length === 0) return null;
+
+  const scored = candidates.map((detail: any) => {
+    let score = 0;
+    if (row.eventDateAD && detail.event_date_ad === row.eventDateAD) score += 100;
+    if (detail.event_year === row.eventYear && detail.event_month === row.eventMonth && detail.event_day === row.eventDay) score += 80;
+    if (normalizeEventIdentity(detail.event_name) === normalizedRowEvent) score += 20;
+    return { detail, score };
+  }).sort((a, b) => b.score - a.score || (a.detail.event_index ?? 999) - (b.detail.event_index ?? 999));
+
+  return scored[0]?.score > 0 ? scored[0].detail : null;
+}
+
 function getFirstName(fullName: string): string {
   if (!fullName) return "";
   return fullName.trim().split(/\s+/)[0];
@@ -177,17 +221,13 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
       return next;
     });
 
-    const cacheKey = `${row.registeredDateTimeAD}__${row.event}`;
+    const cacheKey = getExpandedCacheKey(row);
     if (expandCache.has(cacheKey)) return;
 
     setExpandCache(prev => new Map(prev).set(cacheKey, { eventDetail: null, contactDetail: null, settings: [], loading: true }));
 
-    const [edRes, cdRes, settingsRes] = await Promise.all([
-      supabase.from('event_details_cache')
-        .select('venue_name,venue_type,venue_city,venue_area,venue_map,parlour_name,parlour_type,parlour_city,parlour_area,parlour_map,event_start_time,event_end_time,parlour_start_time,parlour_end_time')
-        .eq('registered_date_time_ad', row.registeredDateTimeAD)
-        .ilike('event_name', row.event)
-        .maybeSingle(),
+    const [eventDetail, cdRes, settingsRes] = await Promise.all([
+      fetchEventDetailForExpandedRow(row),
       supabase.from('contact_details_cache')
         .select('bride_full_name,bride_contact_number,bride_whatsapp_number,bride_home_city,bride_home_area,bride_home_map,groom_full_name,groom_contact_number,groom_whatsapp_number,groom_home_city,groom_home_area,groom_home_map')
         .eq('registered_date_time_ad', row.registeredDateTimeAD)
@@ -199,7 +239,7 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
     ]);
 
     setExpandCache(prev => new Map(prev).set(cacheKey, {
-      eventDetail: edRes.data || null,
+      eventDetail,
       contactDetail: cdRes.data || null,
       settings: settingsRes.data || [],
       loading: false,
@@ -372,22 +412,22 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
       newKeys.add(`${row.registeredDateTimeAD}-${row.event}-${row.eventDateAD}`);
     }
     setExpandedRows(newKeys);
-    const toFetch = filteredRows.filter(row => !expandCache.has(`${row.registeredDateTimeAD}__${row.event}`));
+    const toFetch = filteredRows.filter(row => !expandCache.has(getExpandedCacheKey(row)));
     setExpandCache(prev => {
       const next = new Map(prev);
       for (const row of toFetch) {
-        next.set(`${row.registeredDateTimeAD}__${row.event}`, { eventDetail: null, contactDetail: null, settings: [], loading: true });
+        next.set(getExpandedCacheKey(row), { eventDetail: null, contactDetail: null, settings: [], loading: true });
       }
       return next;
     });
     await Promise.all(toFetch.map(async (row) => {
-      const cacheKey = `${row.registeredDateTimeAD}__${row.event}`;
-      const [edRes, cdRes, settingsRes] = await Promise.all([
-        supabase.from('event_details_cache').select('venue_name,venue_type,venue_city,venue_area,venue_map,parlour_name,parlour_type,parlour_city,parlour_area,parlour_map,event_start_time,event_end_time,parlour_start_time,parlour_end_time').eq('registered_date_time_ad', row.registeredDateTimeAD).ilike('event_name', row.event).maybeSingle(),
+      const cacheKey = getExpandedCacheKey(row);
+      const [eventDetail, cdRes, settingsRes] = await Promise.all([
+        fetchEventDetailForExpandedRow(row),
         supabase.from('contact_details_cache').select('bride_full_name,bride_contact_number,bride_whatsapp_number,bride_home_city,bride_home_area,bride_home_map,groom_full_name,groom_contact_number,groom_whatsapp_number,groom_home_city,groom_home_area,groom_home_map').eq('registered_date_time_ad', row.registeredDateTimeAD).maybeSingle(),
         supabase.from('freelancer_event_settings').select('show_bride_details,show_groom_details,show_venue_details,show_parlour_details,show_bride_location,show_groom_location,freelancer_name,role_code,personal_note').eq('registered_date_time_ad', row.registeredDateTimeAD).eq('event_name', row.event),
       ]);
-      setExpandCache(prev => new Map(prev).set(cacheKey, { eventDetail: edRes.data || null, contactDetail: cdRes.data || null, settings: settingsRes.data || [], loading: false }));
+      setExpandCache(prev => new Map(prev).set(cacheKey, { eventDetail, contactDetail: cdRes.data || null, settings: settingsRes.data || [], loading: false }));
     }));
   }, [allExpanded, filteredRows, expandCache]);
 
@@ -717,7 +757,7 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
     const groupIdx = dayGroups.get(rowKey) ?? 0;
     const dayColor = DAY_COLORS[groupIdx % DAY_COLORS.length];
     const isExpanded = expandedRows.has(rowKey);
-    const cacheKey = `${row.registeredDateTimeAD}__${row.event}`;
+    const cacheKey = getExpandedCacheKey(row);
     const cached = expandCache.get(cacheKey);
     const isLagan = laganDays.has(parseInt(row.eventDay));
     const reqCodes = (row.requiredCategories || '').split(',').map(c => c.trim()).filter(Boolean);
@@ -835,7 +875,7 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
   const renderMobileEventCard = useCallback((row: FreelancerAssignment, idx: number, rowsList: FreelancerAssignment[], isCompleted = false) => {
     const rowKey = `${row.registeredDateTimeAD}-${row.event}-${row.eventDateAD}`;
     const isExpanded = expandedRows.has(rowKey);
-    const cacheKey = `${row.registeredDateTimeAD}__${row.event}`;
+    const cacheKey = getExpandedCacheKey(row);
     const cached = expandCache.get(cacheKey);
     const isLagan = laganDays.has(parseInt(row.eventDay));
     const reqCodes = (row.requiredCategories || '').split(',').map(c => c.trim()).filter(Boolean);
