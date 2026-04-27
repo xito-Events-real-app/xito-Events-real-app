@@ -757,7 +757,7 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
     const groupIdx = dayGroups.get(rowKey) ?? 0;
     const dayColor = DAY_COLORS[groupIdx % DAY_COLORS.length];
     const isExpanded = expandedRows.has(rowKey);
-    const cacheKey = `${row.registeredDateTimeAD}__${row.event}`;
+    const cacheKey = getExpandedCacheKey(row);
     const cached = expandCache.get(cacheKey);
     const isLagan = laganDays.has(parseInt(row.eventDay));
     const reqCodes = (row.requiredCategories || '').split(',').map(c => c.trim()).filter(Boolean);
@@ -875,7 +875,7 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
   const renderMobileEventCard = useCallback((row: FreelancerAssignment, idx: number, rowsList: FreelancerAssignment[], isCompleted = false) => {
     const rowKey = `${row.registeredDateTimeAD}-${row.event}-${row.eventDateAD}`;
     const isExpanded = expandedRows.has(rowKey);
-    const cacheKey = `${row.registeredDateTimeAD}__${row.event}`;
+    const cacheKey = getExpandedCacheKey(row);
     const cached = expandCache.get(cacheKey);
     const isLagan = laganDays.has(parseInt(row.eventDay));
     const reqCodes = (row.requiredCategories || '').split(',').map(c => c.trim()).filter(Boolean);
