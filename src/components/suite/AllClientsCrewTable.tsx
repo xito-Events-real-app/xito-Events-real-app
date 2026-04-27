@@ -412,22 +412,22 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
       newKeys.add(`${row.registeredDateTimeAD}-${row.event}-${row.eventDateAD}`);
     }
     setExpandedRows(newKeys);
-    const toFetch = filteredRows.filter(row => !expandCache.has(`${row.registeredDateTimeAD}__${row.event}`));
+    const toFetch = filteredRows.filter(row => !expandCache.has(getExpandedCacheKey(row)));
     setExpandCache(prev => {
       const next = new Map(prev);
       for (const row of toFetch) {
-        next.set(`${row.registeredDateTimeAD}__${row.event}`, { eventDetail: null, contactDetail: null, settings: [], loading: true });
+        next.set(getExpandedCacheKey(row), { eventDetail: null, contactDetail: null, settings: [], loading: true });
       }
       return next;
     });
     await Promise.all(toFetch.map(async (row) => {
-      const cacheKey = `${row.registeredDateTimeAD}__${row.event}`;
-      const [edRes, cdRes, settingsRes] = await Promise.all([
-        supabase.from('event_details_cache').select('venue_name,venue_type,venue_city,venue_area,venue_map,parlour_name,parlour_type,parlour_city,parlour_area,parlour_map,event_start_time,event_end_time,parlour_start_time,parlour_end_time').eq('registered_date_time_ad', row.registeredDateTimeAD).ilike('event_name', row.event).maybeSingle(),
+      const cacheKey = getExpandedCacheKey(row);
+      const [eventDetail, cdRes, settingsRes] = await Promise.all([
+        fetchEventDetailForExpandedRow(row),
         supabase.from('contact_details_cache').select('bride_full_name,bride_contact_number,bride_whatsapp_number,bride_home_city,bride_home_area,bride_home_map,groom_full_name,groom_contact_number,groom_whatsapp_number,groom_home_city,groom_home_area,groom_home_map').eq('registered_date_time_ad', row.registeredDateTimeAD).maybeSingle(),
         supabase.from('freelancer_event_settings').select('show_bride_details,show_groom_details,show_venue_details,show_parlour_details,show_bride_location,show_groom_location,freelancer_name,role_code,personal_note').eq('registered_date_time_ad', row.registeredDateTimeAD).eq('event_name', row.event),
       ]);
-      setExpandCache(prev => new Map(prev).set(cacheKey, { eventDetail: edRes.data || null, contactDetail: cdRes.data || null, settings: settingsRes.data || [], loading: false }));
+      setExpandCache(prev => new Map(prev).set(cacheKey, { eventDetail, contactDetail: cdRes.data || null, settings: settingsRes.data || [], loading: false }));
     }));
   }, [allExpanded, filteredRows, expandCache]);
 
