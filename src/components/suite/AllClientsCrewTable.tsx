@@ -221,17 +221,13 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
       return next;
     });
 
-    const cacheKey = `${row.registeredDateTimeAD}__${row.event}`;
+    const cacheKey = getExpandedCacheKey(row);
     if (expandCache.has(cacheKey)) return;
 
     setExpandCache(prev => new Map(prev).set(cacheKey, { eventDetail: null, contactDetail: null, settings: [], loading: true }));
 
-    const [edRes, cdRes, settingsRes] = await Promise.all([
-      supabase.from('event_details_cache')
-        .select('venue_name,venue_type,venue_city,venue_area,venue_map,parlour_name,parlour_type,parlour_city,parlour_area,parlour_map,event_start_time,event_end_time,parlour_start_time,parlour_end_time')
-        .eq('registered_date_time_ad', row.registeredDateTimeAD)
-        .ilike('event_name', row.event)
-        .maybeSingle(),
+    const [eventDetail, cdRes, settingsRes] = await Promise.all([
+      fetchEventDetailForExpandedRow(row),
       supabase.from('contact_details_cache')
         .select('bride_full_name,bride_contact_number,bride_whatsapp_number,bride_home_city,bride_home_area,bride_home_map,groom_full_name,groom_contact_number,groom_whatsapp_number,groom_home_city,groom_home_area,groom_home_map')
         .eq('registered_date_time_ad', row.registeredDateTimeAD)
@@ -243,7 +239,7 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
     ]);
 
     setExpandCache(prev => new Map(prev).set(cacheKey, {
-      eventDetail: edRes.data || null,
+      eventDetail,
       contactDetail: cdRes.data || null,
       settings: settingsRes.data || [],
       loading: false,
