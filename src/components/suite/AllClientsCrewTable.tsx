@@ -84,6 +84,50 @@ const PILL_STYLES = {
   tech: 'bg-cyan-50 text-cyan-700 border-cyan-200',
 };
 
+const EVENT_DETAIL_SELECT = 'event_index,event_name,event_year,event_month,event_day,event_date_ad,venue_name,venue_type,venue_city,venue_area,venue_map,parlour_name,parlour_type,parlour_city,parlour_area,parlour_map,event_start_time,event_end_time,bride_start_time,bride_end_time,groom_start_time,groom_end_time,parlour_start_time,parlour_end_time,do_groom_come_in_mehndi,guest_count';
+
+function normalizeEventIdentity(value: string | null | undefined): string {
+  return (value || '').trim().replace(/\s+/g, ' ').toUpperCase();
+}
+
+function getExpandedCacheKey(row: FreelancerAssignment): string {
+  return `${row.registeredDateTimeAD}__${row.eventDateAD || ''}__${normalizeEventIdentity(row.event)}`;
+}
+
+async function fetchEventDetailForExpandedRow(row: FreelancerAssignment) {
+  const normalizedRowEvent = normalizeEventIdentity(row.event);
+
+  if (row.eventDateAD) {
+    const { data: exactRows } = await supabase
+      .from('event_details_cache')
+      .select(EVENT_DETAIL_SELECT)
+      .eq('registered_date_time_ad', row.registeredDateTimeAD)
+      .eq('event_date_ad', row.eventDateAD);
+
+    const exactByName = (exactRows || []).find((detail: any) => normalizeEventIdentity(detail.event_name) === normalizedRowEvent);
+    if (exactByName) return exactByName;
+    if ((exactRows || []).length === 1) return exactRows?.[0] || null;
+  }
+
+  const { data: allRows } = await supabase
+    .from('event_details_cache')
+    .select(EVENT_DETAIL_SELECT)
+    .eq('registered_date_time_ad', row.registeredDateTimeAD);
+
+  const candidates = allRows || [];
+  if (candidates.length === 0) return null;
+
+  const scored = candidates.map((detail: any) => {
+    let score = 0;
+    if (row.eventDateAD && detail.event_date_ad === row.eventDateAD) score += 100;
+    if (detail.event_year === row.eventYear && detail.event_month === row.eventMonth && detail.event_day === row.eventDay) score += 80;
+    if (normalizeEventIdentity(detail.event_name) === normalizedRowEvent) score += 20;
+    return { detail, score };
+  }).sort((a, b) => b.score - a.score || (a.detail.event_index ?? 999) - (b.detail.event_index ?? 999));
+
+  return scored[0]?.score > 0 ? scored[0].detail : null;
+}
+
 function getFirstName(fullName: string): string {
   if (!fullName) return "";
   return fullName.trim().split(/\s+/)[0];
